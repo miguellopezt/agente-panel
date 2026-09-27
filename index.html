@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Agente · panel</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.min.css">
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.iife.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1115; --card: #181b22; --borde: #262a33; --texto: #e6e8eb; --suave: #9aa1ab;
+    --up: #2fbf71; --down: #ef5350; --ok-bg: #12351f; --mal-bg: #3d1618; --enlace: #7ab7ff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f6f8; --card: #ffffff; --borde: #e1e4e8; --texto: #1b1f24; --suave: #5f6770;
+      --up: #1a8f4c; --down: #c62828; --ok-bg: #e3f5ea; --mal-bg: #fde8e8; --enlace: #0b5cad;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--texto);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 40px; }
+  h1 { font-size: 1.15rem; margin: 4px 0 12px; }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); margin: 24px 0 8px; }
+  .caja { background: var(--card); border: 1px solid var(--borde); border-radius: 10px; padding: 12px; }
+  .suave { color: var(--suave); font-size: .85rem; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  #estado { border-radius: 10px; padding: 12px; border: 1px solid var(--borde); }
+  #estado.ok { background: var(--ok-bg); } #estado.mal { background: var(--mal-bg); }
+  #estado .titulo { font-weight: 600; font-size: 1.05rem; }
+  #estado ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; }
+  #estado li { display: flex; gap: 8px; font-size: .9rem; }
+  #estado li .marca { width: 1.2em; flex: none; }
+  #actualizado { margin-top: 8px; }
+  #actualizado.viejo { color: var(--down); font-weight: 600; }
+
+  .rejilla { display: grid; gap: 10px; grid-template-columns: 1fr; }
+  @media (min-width: 560px) { .rejilla { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 900px) { .rejilla { grid-template-columns: repeat(3, 1fr); } }
+  .par .cab { display: flex; justify-content: space-between; align-items: baseline; }
+  .par .nombre { font-weight: 600; }
+  .par .precio { font-size: 1.25rem; font-weight: 600; }
+  .par .vars { display: flex; gap: 14px; font-size: .85rem; margin: 2px 0 6px; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .mini { height: 56px; }
+  .mini .u-legend { display: none; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--borde); }
+  th { color: var(--suave); font-weight: 500; }
+  td.der, th.der { text-align: right; }
+  tr:last-child td { border-bottom: 0; }
+
+  #noticias { list-style: none; margin: 0; padding: 0; }
+  #noticias li { padding: 8px 0; border-bottom: 1px solid var(--borde); }
+  #noticias li:last-child { border-bottom: 0; }
+  #noticias a { color: var(--enlace); text-decoration: none; }
+  #noticias a:hover { text-decoration: underline; }
+  .etiqueta { display: inline-block; font-size: .72rem; padding: 0 6px; border-radius: 4px;
+              border: 1px solid var(--borde); color: var(--suave); margin-right: 4px; }
+  #error { display: none; color: var(--down); margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Agente de trading</h1>
+
+  <section id="estado" class="caja" aria-live="polite">
+    <div class="titulo">Cargando…</div>
+    <ul id="comprobaciones"></ul>
+    <div id="actualizado" class="suave"></div>
+  </section>
+  <p id="error" role="alert"></p>
+
+  <h2>Pares</h2>
+  <div id="pares" class="rejilla"></div>
+
+  <h2>Derivados</h2>
+  <div class="caja"><table>
+    <thead><tr><th>Par</th><th class="der">Funding</th><th class="der">Open interest</th></tr></thead>
+    <tbody id="derivados"></tbody>
+  </table></div>
+
+  <h2>Últimas noticias</h2>
+  <div class="caja"><ul id="noticias"></ul></div>
+
+  <h2>Últimas ejecuciones</h2>
+  <div class="caja"><table>
+    <thead><tr><th>Hora</th><th>Fuente</th><th>Estado</th><th class="der">Filas</th></tr></thead>
+    <tbody id="ejecuciones"></tbody>
+  </table></div>
+</main>
+
+<script>
+"use strict";
+const URL_ESTADO = "https://raw.githubusercontent.com/miguellopezt/agente-panel/datos/estado.json";
+const RECARGA_MS = 5 * 60 * 1000;
+const VIEJO_MIN = 30;
+let generado = null;
+const graficos = {};
+
+// Todo el texto externo (titulos, urls, fuentes) entra por textContent o por
+// atributos validados: nunca innerHTML.
+function el(tag, props = {}, ...hijos) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else e.setAttribute(k, v);
+  }
+  for (const h of hijos) if (h != null) e.append(h);
+  return e;
+}
+const vaciar = (id) => { const e = document.getElementById(id); e.replaceChildren(); return e; };
+const hora = (iso) => new Date(iso).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+const fecha = (iso) => new Date(iso).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+function precio(x) {
+  const dec = x >= 1000 ? 2 : x >= 10 ? 2 : x >= 1 ? 4 : 5;
+  return x.toLocaleString("es-ES", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+const fijo = (x, d) => x.toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
+function variacion(v) {
+  if (v == null) return el("span", { class: "suave", text: "—", title: "sin datos suficientes todavía" });
+  const signo = v > 0 ? "▲ +" : v < 0 ? "▼ " : "";
+  return el("span", { class: v > 0 ? "up" : v < 0 ? "down" : "", text: signo + fijo(v, 2) + " %" });
+}
+function compacto(x) {
+  return x.toLocaleString("es-ES", { notation: "compact", maximumFractionDigits: 2 });
+}
+
+function pintarEstado(e) {
+  const caja = document.getElementById("estado");
+  const cal = e.calidad;
+  const titulo = caja.querySelector(".titulo");
+  const lista = vaciar("comprobaciones");
+  if (!cal) {
+    caja.className = "caja mal"; titulo.textContent = "Sin datos de calidad";
+  } else {
+    caja.className = "caja " + (cal.ok ? "ok" : "mal");
+    const malas = cal.comprobaciones.filter((c) => !c.ok).length;
+    titulo.textContent = cal.ok ? "Todo en orden" : `${malas} comprobación${malas > 1 ? "es" : ""} en fallo`;
+    for (const c of cal.comprobaciones) {
+      lista.append(el("li", {},
+        el("span", { class: "marca " + (c.ok ? "up" : "down"), text: c.ok ? "✓" : "✗" }),
+        el("span", {}, el("strong", { text: c.nombre }),
+          c.detalle ? el("span", { class: "suave", text: " · " + c.detalle }) : null)));
+    }
+    lista.append(el("li", { class: "suave" }, "Comprobado " + fecha(cal.generado)));
+  }
+}
+
+function pintarActualizado() {
+  if (!generado) return;
+  const min = (Date.now() - new Date(generado).getTime()) / 60000;
+  const d = document.getElementById("actualizado");
+  d.textContent = `Actualizado ${fecha(generado)} (hace ${Math.max(0, Math.round(min))} min)` +
+                  (min > VIEJO_MIN ? " — datos antiguos" : "");
+  d.className = min > VIEJO_MIN ? "viejo" : "suave";
+}
+
+function mini(contenedor, par, serie, color) {
+  const ancho = contenedor.clientWidth || 280;
+  const datos = [serie.t, serie.c];
+  if (graficos[par]) { graficos[par].destroy(); }
+  graficos[par] = new uPlot({
+    width: ancho, height: 56, legend: { show: false }, cursor: { show: false },
+    padding: [4, 0, 4, 0],
+    scales: { x: { time: true } },
+    axes: [{ show: false }, { show: false }],
+    series: [{}, { stroke: color, width: 1.5, points: { show: false } }],
+  }, datos, contenedor);
+}
+
+function pintarPares(e) {
+  const cont = vaciar("pares");
+  const estilos = getComputedStyle(document.documentElement);
+  for (const [par, p] of Object.entries(e.pares)) {
+    const tarjeta = el("div", { class: "caja par" });
+    if (!p) { tarjeta.append(el("div", { class: "nombre", text: par }), el("div", { class: "suave", text: "sin datos" })); cont.append(tarjeta); continue; }
+    const grafico = el("div", { class: "mini" });
+    tarjeta.append(
+      el("div", { class: "cab" },
+        el("span", { class: "nombre", text: par.replace("USDT", "") + " / USDT" }),
+        el("span", { class: "precio num", text: precio(p.precio) })),
+      el("div", { class: "vars num" },
+        el("span", {}, "1 h ", variacion(p.var_1h)),
+        el("span", {}, "24 h ", variacion(p.var_24h))),
+      grafico,
+      el("div", { class: "suave", text: `${p.serie_5m.t.length} puntos de 5 min · última vela ${hora(p.ts)}` }));
+    cont.append(tarjeta);
+    const sube = p.serie_5m.c.length > 1 && p.serie_5m.c.at(-1) >= p.serie_5m.c[0];
+    requestAnimationFrame(() => mini(grafico, par, p.serie_5m,
+      estilos.getPropertyValue(sube ? "--up" : "--down").trim()));
+  }
+}
+
+function pintarDerivados(e) {
+  const tb = vaciar("derivados");
+  for (const [par, d] of Object.entries(e.derivados)) {
+    const fr = d.funding_rate * 100;
+    tb.append(el("tr", {},
+      el("td", { text: par.replace("USDT", "") }),
+      el("td", { class: "der num " + (fr > 0 ? "up" : fr < 0 ? "down" : ""), text: fijo(fr, 4) + " %" }),
+      el("td", { class: "der num", text: compacto(d.open_interest) })));
+  }
+}
+
+function enlaceSeguro(url) {
+  try { const u = new URL(url); return (u.protocol === "https:" || u.protocol === "http:") ? u.href : null; }
+  catch { return null; }
+}
+
+function pintarNoticias(e) {
+  const ul = vaciar("noticias");
+  for (const n of e.noticias) {
+    const href = enlaceSeguro(n.url);
+    const titulo = href
+      ? el("a", { href, target: "_blank", rel: "noopener noreferrer", text: n.titulo })
+      : el("span", { text: n.titulo });
+    const meta = el("div", { class: "suave" });
+    for (const p of n.pares) meta.append(el("span", { class: "etiqueta", text: p.replace("USDT", "") }));
+    meta.append(`${fecha(n.publicado)} · ${n.fuente}${n.idioma && n.idioma !== "English" ? " · " + n.idioma : ""}`);
+    ul.append(el("li", {}, titulo, meta));
+  }
+}
+
+function pintarEjecuciones(e) {
+  const tb = vaciar("ejecuciones");
+  for (const x of e.ejecuciones) {
+    tb.append(el("tr", {},
+      el("td", { class: "num", text: hora(x.inicio) }),
+      el("td", { text: x.fuente }),
+      el("td", { class: x.ok ? "up" : "down", text: x.ok ? "✓ ok" : "✗ fallo" }),
+      el("td", { class: "der num", text: x.filas == null ? "—" : String(x.filas) })));
+  }
+}
+
+async function cargar() {
+  const err = document.getElementById("error");
+  try {
+    const r = await fetch(URL_ESTADO + "?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const e = await r.json();
+    generado = e.generado;
+    pintarEstado(e); pintarActualizado(); pintarPares(e);
+    pintarDerivados(e); pintarNoticias(e); pintarEjecuciones(e);
+    err.style.display = "none";
+  } catch (ex) {
+    err.textContent = "No se pudo cargar estado.json: " + ex.message;
+    err.style.display = "block";
+  }
+}
+
+cargar();
+setInterval(cargar, RECARGA_MS);
+setInterval(pintarActualizado, 30 * 1000);
+let redimension;
+window.addEventListener("resize", () => {
+  clearTimeout(redimension);
+  redimension = setTimeout(() => {
+    for (const [par, u] of Object.entries(graficos)) {
+      const cont = u.root.parentElement;
+      u.setSize({ width: cont.clientWidth, height: 56 });
+    }
+  }, 150);
+});
+</script>
+</body>
+</html>
