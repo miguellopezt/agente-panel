@@ -11,11 +11,13 @@
   :root {
     --bg: #0f1115; --card: #181b22; --borde: #262a33; --texto: #e6e8eb; --suave: #9aa1ab;
     --up: #2fbf71; --down: #ef5350; --ok-bg: #12351f; --mal-bg: #3d1618; --enlace: #7ab7ff;
+    --serie-a: #5aa9ff; --serie-b: #f5a524; --serie-ref: #9aa1ab;
   }
   @media (prefers-color-scheme: light) {
     :root {
       --bg: #f5f6f8; --card: #ffffff; --borde: #e1e4e8; --texto: #1b1f24; --suave: #5f6770;
       --up: #1a8f4c; --down: #c62828; --ok-bg: #e3f5ea; --mal-bg: #fde8e8; --enlace: #0b5cad;
+      --serie-a: #1f6fd1; --serie-b: #b86e00; --serie-ref: #6b737c;
     }
   }
   * { box-sizing: border-box; }
@@ -64,6 +66,8 @@
   .etiqueta { display: inline-block; font-size: .72rem; padding: 0 6px; border-radius: 4px;
               border: 1px solid var(--borde); color: var(--suave); margin-right: 4px; }
   #error { display: none; color: var(--down); margin: 8px 0; }
+  #sim-grafico { height: 220px; margin-bottom: 8px; }
+  .muestra { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
 </style>
 </head>
 <body>
@@ -79,6 +83,17 @@
 
   <h2>Pares</h2>
   <div id="pares" class="rejilla"></div>
+
+  <h2>Carteras simuladas (sin dinero real)</h2>
+  <div class="caja">
+    <div id="sim-vacia" class="suave">La simulación aún no ha empezado.</div>
+    <div id="sim-grafico"></div>
+    <table>
+      <thead><tr><th>Cartera</th><th class="der">Valor</th><th class="der">Rentab.</th><th class="der">Caída máx.</th><th class="der">BTC</th><th class="der">ETH</th><th class="der">Efectivo</th></tr></thead>
+      <tbody id="simulacion"></tbody>
+    </table>
+    <div id="sim-nota" class="suave"></div>
+  </div>
 
   <h2>Derivados</h2>
   <div class="caja"><table>
@@ -198,6 +213,64 @@ function pintarPares(e) {
   }
 }
 
+const CARTERAS = [
+  ["regla", "A · regla", "--serie-a"],
+  ["ejecutable", "B · ejecutable", "--serie-b"],
+  ["comprar_mantener", "Comprar y mantener", "--serie-ref"],
+];
+let graficoSim = null;
+const pct = (x) => (x > 0 ? "+" : "") + fijo(x * 100, 1) + " %";
+
+function pintarSimulacion(e) {
+  const sim = e.simulacion;
+  const tb = vaciar("simulacion");
+  const cont = document.getElementById("sim-grafico");
+  const hay = sim && Object.values(sim).some((c) => c.serie.fecha.length);
+  document.getElementById("sim-vacia").style.display = hay ? "none" : "block";
+  cont.style.display = hay ? "block" : "none";
+  if (graficoSim) { graficoSim.destroy(); graficoSim = null; }
+  if (!hay) { document.getElementById("sim-nota").textContent = ""; return; }
+  const estilos = getComputedStyle(document.documentElement);
+  const color = (v) => estilos.getPropertyValue(v).trim();
+  // Eje comun: todas las fechas de todas las carteras (UTC, en segundos)
+  const fechas = [...new Set(CARTERAS.flatMap(([k]) => sim[k] ? sim[k].serie.fecha : []))].sort();
+  const x = fechas.map((f) => Date.parse(f + "T00:00:00Z") / 1000);
+  const series = [{}], datos = [x];
+  for (const [k, nombre, v] of CARTERAS) {
+    const c = sim[k];
+    if (!c) continue;
+    const porFecha = Object.fromEntries(c.serie.fecha.map((f, i) => [f, c.serie.valor_usd[i]]));
+    datos.push(fechas.map((f) => porFecha[f] ?? null));
+    series.push({ label: nombre, stroke: color(v), width: 2, points: { show: fechas.length < 3 },
+                  value: (u, y) => y == null ? "—" : fijo(y, 2) + " $" });
+    const pos = c.posicion || {};
+    // El coste de la compra sale del efectivo: puede quedar en -0,1 %, se muestra como 0 %
+    const peso = (p) => !pos[p] ? "—" : Math.abs(pos[p].peso) < 0.005 ? "0 %" : fijo(pos[p].peso * 100, 0) + " %";
+    tb.append(el("tr", {},
+      el("td", {}, el("span", { class: "muestra", style: "background:" + color(v) }), nombre),
+      el("td", { class: "der num", text: fijo(c.valor_usd, 2) + " $" }),
+      el("td", { class: "der num " + (c.rentabilidad >= 0 ? "up" : "down"), text: pct(c.rentabilidad) }),
+      el("td", { class: "der num down", text: pct(c.caida_maxima) }),
+      el("td", { class: "der num", text: peso("BTCUSDT") }),
+      el("td", { class: "der num", text: peso("ETHUSDT") }),
+      el("td", { class: "der num", text: peso("efectivo") })));
+  }
+  const alguna = Object.values(sim)[0];
+  document.getElementById("sim-nota").textContent =
+    `Desde ${alguna.inicio} con ${fijo(alguna.capital_eur, 0)} € (${fijo(alguna.capital_usd, 2)} $) por cartera. ` +
+    "A: tendencia 200 d × tamaño por volatilidad, reequilibrio diario. B: igual con banda del 20 % y orden mínima de 10 $. " +
+    "Pesos sobre el valor de cada cartera; decisión diaria a las 00:05 UTC.";
+  requestAnimationFrame(() => {
+    graficoSim = new uPlot({
+      width: cont.clientWidth || 600, height: 220,
+      scales: { x: { time: true } },
+      axes: [{ stroke: color("--suave"), grid: { stroke: color("--borde") } },
+             { stroke: color("--suave"), grid: { stroke: color("--borde") }, size: 56 }],
+      series,
+    }, datos, cont);
+  });
+}
+
 function pintarDerivados(e) {
   const tb = vaciar("derivados");
   for (const [par, d] of Object.entries(e.derivados)) {
@@ -247,7 +320,7 @@ async function cargar() {
     const e = await r.json();
     generado = e.generado;
     pintarEstado(e); pintarActualizado(); pintarPares(e);
-    pintarDerivados(e); pintarNoticias(e); pintarEjecuciones(e);
+    pintarSimulacion(e); pintarDerivados(e); pintarNoticias(e); pintarEjecuciones(e);
     err.style.display = "none";
   } catch (ex) {
     err.textContent = "No se pudo cargar estado.json: " + ex.message;
@@ -265,6 +338,10 @@ window.addEventListener("resize", () => {
     for (const [par, u] of Object.entries(graficos)) {
       const cont = u.root.parentElement;
       u.setSize({ width: cont.clientWidth, height: 56 });
+    }
+    if (graficoSim) {
+      const cont = document.getElementById("sim-grafico");
+      graficoSim.setSize({ width: cont.clientWidth, height: 220 });
     }
   }, 150);
 });
