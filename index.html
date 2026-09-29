@@ -66,7 +66,17 @@
   .etiqueta { display: inline-block; font-size: .72rem; padding: 0 6px; border-radius: 4px;
               border: 1px solid var(--borde); color: var(--suave); margin-right: 4px; }
   #error { display: none; color: var(--down); margin: 8px 0; }
-  #sim-grafico { height: 220px; margin-bottom: 8px; }
+  .desliza { overflow-x: auto; }
+  table.sim th.grupo { text-align: center; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em;
+                       border-bottom: 1px solid var(--borde); padding-bottom: 2px; }
+  table.sim th.corte, table.sim td.corte { padding-left: 16px; }
+  table.sim .desc { display: block; font-size: .78rem; color: var(--suave); margin-left: 16px; }
+  table.sim td { vertical-align: top; }
+  table.sim td.der, table.sim th { white-space: nowrap; }
+  table.sim td:first-child { min-width: 190px; }
+  .subtitulo { font-size: .85rem; color: var(--suave); margin: 16px 0 4px; }
+  #sim-grafico { margin-bottom: 8px; }
+  #sim-grafico .u-legend { display: none; }
   .muestra { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
 </style>
 </head>
@@ -87,12 +97,19 @@
   <h2>Carteras simuladas (sin dinero real)</h2>
   <div class="caja">
     <div id="sim-vacia" class="suave">La simulación aún no ha empezado.</div>
-    <div id="sim-grafico"></div>
-    <table>
-      <thead><tr><th>Cartera</th><th class="der">Valor</th><th class="der">Rentab.</th><th class="der">Caída máx.</th><th class="der">BTC</th><th class="der">ETH</th><th class="der">Efectivo</th></tr></thead>
-      <tbody id="simulacion"></tbody>
-    </table>
-    <div id="sim-nota" class="suave"></div>
+    <div id="sim-contenido">
+      <div class="desliza"><table class="sim">
+        <thead>
+          <tr><th rowspan="2">Cartera</th><th colspan="3" class="grupo">Resultado</th><th colspan="3" class="grupo corte">Posición</th></tr>
+          <tr><th class="der">Valor</th><th class="der">Rentab.</th><th class="der">Caída máx.</th>
+              <th class="der corte">BTC</th><th class="der">ETH</th><th class="der">Efectivo</th></tr>
+        </thead>
+        <tbody id="simulacion"></tbody>
+      </table></div>
+      <div class="subtitulo">Rentabilidad desde el inicio</div>
+      <div id="sim-grafico"></div>
+      <div id="sim-nota" class="suave"></div>
+    </div>
   </div>
 
   <h2>Derivados</h2>
@@ -214,10 +231,12 @@ function pintarPares(e) {
 }
 
 const CARTERAS = [
-  ["regla", "A · regla", "--serie-a"],
-  ["ejecutable", "B · ejecutable", "--serie-b"],
-  ["comprar_mantener", "Comprar y mantener", "--serie-ref"],
+  ["regla", "A · regla", "--serie-a", "Tendencia 200 d × tamaño por volatilidad, reequilibrio diario"],
+  ["ejecutable", "B · ejecutable", "--serie-b", "Como A, con banda del 20 % y orden mínima de 10 $"],
+  ["comprar_mantener", "Comprar y mantener", "--serie-ref", "Referencia: BTC + ETH a partes iguales, sin operar"],
 ];
+const REVISIONES = "29-dic-2026 y 29-mar-2027";
+const DIA = 86400;
 let graficoSim = null;
 const pct = (x) => (x > 0 ? "+" : "") + fijo(x * 100, 1) + " %";
 
@@ -227,45 +246,58 @@ function pintarSimulacion(e) {
   const cont = document.getElementById("sim-grafico");
   const hay = sim && Object.values(sim).some((c) => c.serie.fecha.length);
   document.getElementById("sim-vacia").style.display = hay ? "none" : "block";
-  cont.style.display = hay ? "block" : "none";
+  document.getElementById("sim-contenido").style.display = hay ? "block" : "none";
   if (graficoSim) { graficoSim.destroy(); graficoSim = null; }
-  if (!hay) { document.getElementById("sim-nota").textContent = ""; return; }
+  if (!hay) return;
   const estilos = getComputedStyle(document.documentElement);
   const color = (v) => estilos.getPropertyValue(v).trim();
   // Eje comun: todas las fechas de todas las carteras (UTC, en segundos)
   const fechas = [...new Set(CARTERAS.flatMap(([k]) => sim[k] ? sim[k].serie.fecha : []))].sort();
   const x = fechas.map((f) => Date.parse(f + "T00:00:00Z") / 1000);
   const series = [{}], datos = [x];
-  for (const [k, nombre, v] of CARTERAS) {
+  for (const [k, nombre, v, desc] of CARTERAS) {
     const c = sim[k];
     if (!c) continue;
-    const porFecha = Object.fromEntries(c.serie.fecha.map((f, i) => [f, c.serie.valor_usd[i]]));
+    // Rentabilidad en % sobre el capital inicial: las tres curvas parten de 0
+    const porFecha = Object.fromEntries(c.serie.fecha.map((f, i) => [f, (c.serie.valor_usd[i] / c.capital_usd - 1) * 100]));
     datos.push(fechas.map((f) => porFecha[f] ?? null));
-    series.push({ label: nombre, stroke: color(v), width: 2, points: { show: fechas.length < 3 },
-                  value: (u, y) => y == null ? "—" : fijo(y, 2) + " $" });
+    series.push({ label: nombre, stroke: color(v), width: 2, points: { show: fechas.length < 3, size: 7 } });
     const pos = c.posicion || {};
     // El coste de la compra sale del efectivo: puede quedar en -0,1 %, se muestra como 0 %
     const peso = (p) => !pos[p] ? "—" : Math.abs(pos[p].peso) < 0.005 ? "0 %" : fijo(pos[p].peso * 100, 0) + " %";
     tb.append(el("tr", {},
-      el("td", {}, el("span", { class: "muestra", style: "background:" + color(v) }), nombre),
+      el("td", {}, el("span", { class: "muestra", style: "background:" + color(v) }), nombre,
+        el("span", { class: "desc", text: desc })),
       el("td", { class: "der num", text: fijo(c.valor_usd, 2) + " $" }),
       el("td", { class: "der num " + (c.rentabilidad >= 0 ? "up" : "down"), text: pct(c.rentabilidad) }),
       el("td", { class: "der num down", text: pct(c.caida_maxima) }),
-      el("td", { class: "der num", text: peso("BTCUSDT") }),
+      el("td", { class: "der num corte", text: peso("BTCUSDT") }),
       el("td", { class: "der num", text: peso("ETHUSDT") }),
       el("td", { class: "der num", text: peso("efectivo") })));
   }
   const alguna = Object.values(sim)[0];
   document.getElementById("sim-nota").textContent =
-    `Desde ${alguna.inicio} con ${fijo(alguna.capital_eur, 0)} € (${fijo(alguna.capital_usd, 2)} $) por cartera. ` +
-    "A: tendencia 200 d × tamaño por volatilidad, reequilibrio diario. B: igual con banda del 20 % y orden mínima de 10 $. " +
-    "Pesos sobre el valor de cada cartera; decisión diaria a las 00:05 UTC.";
+    `Desde ${alguna.inicio} con ${fijo(alguna.capital_eur, 0)} € (${fijo(alguna.capital_usd, 2)} $) por cartera · ` +
+    `decisión diaria a las 00:05 UTC · revisiones el ${REVISIONES}.`;
   requestAnimationFrame(() => {
     graficoSim = new uPlot({
-      width: cont.clientWidth || 600, height: 220,
-      scales: { x: { time: true } },
-      axes: [{ stroke: color("--suave"), grid: { stroke: color("--borde") } },
-             { stroke: color("--suave"), grid: { stroke: color("--borde") }, size: 56 }],
+      width: cont.clientWidth || 600, height: 200, legend: { show: false },
+      scales: {
+        // Al menos dos semanas de eje, para que los primeros dias no se estiren
+        // (desde los datos: con un solo punto uPlot no llama a range con min/max utiles)
+        x: { time: true, auto: false, range: () => [x[0], Math.max(x.at(-1), x[0] + 14 * DIA)] },
+        // Al menos ±1 punto porcentual alrededor de las curvas, siempre con el 0 dentro
+        y: { range: (u, min, max) => {
+          const lo = Math.min(min, 0), hi = Math.max(max, 0);
+          const medio = (lo + hi) / 2, mitad = Math.max((hi - lo) / 2 * 1.15, 1);
+          return [medio - mitad, medio + mitad];
+        } },
+      },
+      axes: [{ stroke: color("--suave"), grid: { stroke: color("--borde") },
+               values: (u, vals) => vals.map((t) => new Date(t * 1000).toLocaleDateString("es-ES",
+                 { day: "numeric", month: "short" })) },
+             { stroke: color("--suave"), grid: { stroke: color("--borde") }, size: 56,
+               values: (u, vals) => vals.map((y) => fijo(y, Math.abs(u.scales.y.max - u.scales.y.min) < 4 ? 1 : 0) + " %") }],
       series,
     }, datos, cont);
   });
