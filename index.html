@@ -77,6 +77,13 @@
   .subtitulo { font-size: .85rem; color: var(--suave); margin: 16px 0 4px; }
   #sim-grafico { margin-bottom: 8px; }
   #sim-grafico .u-legend { display: none; }
+  table.senal th, table.senal td { white-space: nowrap; }
+  #senal-nota { margin-top: 6px; }
+  .estado-par { display: inline-block; font-size: .78rem; padding: 0 8px; border-radius: 4px; font-weight: 600; }
+  .estado-par.dentro { background: var(--ok-bg); color: var(--up); }
+  .estado-par.fuera { background: var(--mal-bg); color: var(--down); }
+  table.ejec th, table.ejec td { white-space: nowrap; }
+  #ejec-nota { margin-top: 6px; }
   .muestra { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
 </style>
 </head>
@@ -94,6 +101,19 @@
   <h2>Pares</h2>
   <div id="pares" class="rejilla"></div>
 
+  <h2>Señal</h2>
+  <div class="caja">
+    <div id="senal-vacia" class="suave">Aún no hay señal del simulador.</div>
+    <div id="senal-contenido">
+      <div class="desliza"><table class="senal">
+        <thead><tr><th>Par</th><th class="der">Cierre</th><th class="der">Media 200 d</th><th>Tendencia</th>
+                   <th class="der">Vol. EWMA 30 d</th><th class="der">Tamaño objetivo</th></tr></thead>
+        <tbody id="senal"></tbody>
+      </table></div>
+      <div id="senal-nota" class="suave"></div>
+    </div>
+  </div>
+
   <h2>Carteras simuladas (sin dinero real)</h2>
   <div class="caja">
     <div id="sim-vacia" class="suave">La simulación aún no ha empezado.</div>
@@ -109,6 +129,32 @@
       <div class="subtitulo">Rentabilidad desde el inicio</div>
       <div id="sim-grafico"></div>
       <div id="sim-nota" class="suave"></div>
+    </div>
+  </div>
+
+  <h2>Ejecutor demo (Binance Demo Mode, sin dinero real)</h2>
+  <div class="caja">
+    <div id="ejec-vacio" class="suave">El ejecutor aún no ha operado.</div>
+    <div id="ejec-contenido">
+      <div class="desliza"><table class="ejec">
+        <thead><tr><th class="der">Valor</th><th class="der">Rentab.</th>
+                   <th class="der">BTC</th><th class="der">ETH</th><th class="der">Efectivo</th></tr></thead>
+        <tbody id="ejec-resumen"></tbody>
+      </table></div>
+      <div class="subtitulo">Órdenes de los últimos 7 días</div>
+      <div id="ejec-sin-ordenes" class="suave">Sin órdenes en los últimos 7 días.</div>
+      <div class="desliza"><table class="ejec" id="ejec-tabla-ordenes">
+        <thead><tr><th>Día</th><th>Par</th><th>Lado</th><th class="der">Nominal</th>
+                   <th class="der">Precio medio</th><th class="der">Comisión</th></tr></thead>
+        <tbody id="ejec-ordenes"></tbody>
+      </table></div>
+      <div class="subtitulo">Conciliación diaria con la cartera B simulada</div>
+      <div class="desliza"><table class="ejec">
+        <thead><tr><th>Día</th><th class="der">Δ peso BTC</th><th class="der">Δ peso ETH</th>
+                   <th class="der">Rentab. ejecutor</th><th class="der">Rentab. B</th><th class="der">Diferencia</th></tr></thead>
+        <tbody id="ejec-conciliacion"></tbody>
+      </table></div>
+      <div id="ejec-nota" class="suave"></div>
     </div>
   </div>
 
@@ -303,6 +349,82 @@ function pintarSimulacion(e) {
   });
 }
 
+// Fechas y horas de la señal siempre en UTC: la regla decide con el cierre diario UTC
+const diaUTC = (iso) => new Date(iso.length === 10 ? iso + "T00:00:00Z" : iso)
+  .toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: "UTC" });
+const horaUTC = (iso) => new Date(iso)
+  .toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+
+function pintarSenal(e) {
+  const s = e.senal;
+  const tb = vaciar("senal");
+  document.getElementById("senal-vacia").style.display = s ? "none" : "block";
+  document.getElementById("senal-contenido").style.display = s ? "block" : "none";
+  if (!s) return;
+  for (const [par, x] of Object.entries(s.pares)) {
+    tb.append(el("tr", {},
+      el("td", { text: par.replace("USDT", "") }),
+      el("td", { class: "der num", text: precio(x.cierre) + " $" }),
+      el("td", { class: "der num", text: precio(x.media_200) + " $" }),
+      el("td", {}, el("span", { class: "estado-par " + (x.dentro ? "dentro" : "fuera"),
+                                text: x.dentro ? "dentro" : "fuera" })),
+      el("td", { class: "der num", text: fijo(x.vol_ewma * 100, 1) + " %" }),
+      el("td", { class: "der num", text: fijo(x.objetivo * 100, 0) + " %",
+                 title: `min(1; 0,40 / vol) = ${fijo(x.tamaño * 100, 0)} %` + (x.dentro ? "" : ", 0 por estar fuera de tendencia") })));
+  }
+  const cierre = Object.values(s.pares)[0].cierre_dia;
+  document.getElementById("senal-nota").textContent =
+    `Cierre diario UTC del ${diaUTC(cierre)} · decidida el ${diaUTC(s.ts_precio)} a las ${horaUTC(s.ts_precio)} UTC · ` +
+    `próxima decisión: ${diaUTC(s.proxima_decision)} a las ${horaUTC(s.proxima_decision)} UTC. ` +
+    `Tamaño objetivo: exposición de cada par sobre su mitad de las carteras A y B; volatilidad anualizada.`;
+}
+
+// Puntos porcentuales con signo (diferencias de peso y de rentabilidad)
+const pp = (x) => (x > 0 ? "+" : "") + fijo(x * 100, 2) + " pp";
+const pct2 = (x) => (x > 0 ? "+" : "") + fijo(x * 100, 2) + " %";
+const clase = (x) => x > 0 ? "up" : x < 0 ? "down" : "";
+
+function pintarEjecutor(e) {
+  const x = e.ejecutor_demo;
+  document.getElementById("ejec-vacio").style.display = x ? "none" : "block";
+  document.getElementById("ejec-contenido").style.display = x ? "block" : "none";
+  if (!x) return;
+  const m = x.moneda;
+  const peso = (k) => x.pesos[k] == null ? "—" : fijo(x.pesos[k] * 100, 1) + " %";
+  vaciar("ejec-resumen").append(el("tr", {},
+    el("td", { class: "der num", text: fijo(x.valor, 2) + " " + m }),
+    el("td", { class: "der num " + clase(x.rentabilidad), text: pct2(x.rentabilidad) }),
+    el("td", { class: "der num", text: peso("BTC" + m) }),
+    el("td", { class: "der num", text: peso("ETH" + m) }),
+    el("td", { class: "der num", text: peso("efectivo") })));
+  const to = vaciar("ejec-ordenes");
+  document.getElementById("ejec-sin-ordenes").style.display = x.ordenes.length ? "none" : "block";
+  document.getElementById("ejec-tabla-ordenes").style.display = x.ordenes.length ? "table" : "none";
+  for (const o of x.ordenes) {
+    to.append(el("tr", {},
+      el("td", { text: diaUTC(o.fecha) }),
+      el("td", { text: o.par.replace(m, "") }),
+      el("td", { class: o.lado === "compra" ? "up" : "down", text: o.lado }),
+      el("td", { class: "der num", text: fijo(o.nominal, 2) + " " + m }),
+      el("td", { class: "der num", text: precio(o.precio_medio) }),
+      el("td", { class: "der num", text: o.comision == null ? "—" : fijo(o.comision, 3) + " " + m })));
+  }
+  const tc = vaciar("ejec-conciliacion");
+  for (const c of [...x.conciliacion].reverse()) {
+    tc.append(el("tr", {},
+      el("td", { text: diaUTC(c.fecha) }),
+      el("td", { class: "der num", text: pp(c.dif_pesos.BTC ?? 0) }),
+      el("td", { class: "der num", text: pp(c.dif_pesos.ETH ?? 0) }),
+      el("td", { class: "der num " + clase(c.rent_ejecutor), text: pct2(c.rent_ejecutor) }),
+      el("td", { class: "der num " + clase(c.rent_b), text: pct2(c.rent_b) }),
+      el("td", { class: "der num " + clase(c.dif_rent), text: pp(c.dif_rent) })));
+  }
+  document.getElementById("ejec-nota").textContent =
+    `Réplica de la cartera B desde el ${diaUTC(x.inicio)} con ${fijo(x.capital, 0)} ${m} · ` +
+    `decisión diaria a las 00:10 UTC · comisiones incluidas. Δ peso: ejecutor menos B el mismo día. ` +
+    `Rentabilidad de B medida desde su valor del día de inicio del ejecutor.`;
+}
+
 function pintarDerivados(e) {
   const tb = vaciar("derivados");
   for (const [par, d] of Object.entries(e.derivados)) {
@@ -352,7 +474,7 @@ async function cargar() {
     const e = await r.json();
     generado = e.generado;
     pintarEstado(e); pintarActualizado(); pintarPares(e);
-    pintarSimulacion(e); pintarDerivados(e); pintarNoticias(e); pintarEjecuciones(e);
+    pintarSenal(e); pintarSimulacion(e); pintarEjecutor(e); pintarDerivados(e); pintarNoticias(e); pintarEjecuciones(e);
     err.style.display = "none";
   } catch (ex) {
     err.textContent = "No se pudo cargar estado.json: " + ex.message;
