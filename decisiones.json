@@ -1,0 +1,30 @@
+[
+  {
+    "id": "publicidad-panel",
+    "pregunta": "¿Qué información puede mostrar esta página pública?",
+    "contexto": "Ahora es genérica: ramas solo por su tipo («Funcionalidad»), modo «activo» en lugar de «real», hitos sin exchange ni importes y estas mismas preguntas redactadas sin nombrar los estudios. Las preguntas pendientes también se publican: nombrar un estudio o una rama revela lo que está en curso, y publicar «real» revela que se opera con dinero.",
+    "opciones": ["Mantener genérica", "Publicar nombres de rama y de estudio", "Publicar nombres de rama, de estudio y modo real"],
+    "recomendada": "Mantener genérica"
+  },
+  {
+    "id": "estudio-a-sharpe",
+    "pregunta": "¿Quitas el Sharpe deflactado como criterio de éxito de uno de los estudios en borrador?",
+    "contexto": "Con unos 15 meses de datos exigiría un ratio anual de unos 4: el estudio no podría dar éxito. Pasaría a ser descriptivo; el estudio cerraría con riesgo, estabilidad y costes.",
+    "opciones": ["Quitarlo (descriptivo)", "Dejarlo", "Ampliar a 36 meses"],
+    "recomendada": "Quitarlo (descriptivo)"
+  },
+  {
+    "id": "estudio-b-descarga",
+    "pregunta": "¿Ejecutas la descarga de datos de un estudio preregistrado?",
+    "contexto": "El preregistro y sus adendas están revisados y aprobados. La descarga la ejecuta el usuario, no el agente.",
+    "opciones": ["Sí, la ejecuto", "Todavía no"],
+    "recomendada": "Sí, la ejecuto"
+  },
+  {
+    "id": "estudio-b-fase-2",
+    "pregunta": "¿Autorizas la fase 2 de ese estudio (código y cálculo)?",
+    "contexto": "Solo empieza con tu aprobación explícita y después de la descarga. Primero el código y sus tests, luego el cálculo y el informe.",
+    "opciones": ["Sí, empezar", "No por ahora"],
+    "recomendada": null
+  }
+]
