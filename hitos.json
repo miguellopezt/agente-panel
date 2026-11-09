@@ -1,0 +1,5 @@
+[
+  {"fecha": "2026-09-29", "nombre": "Inicio de la simulación: carteras A, B y comprar y mantener", "estado": "hecho"},
+  {"fecha": "2026-12-29", "nombre": "Revisión de 3 meses: A y B frente a su backtest y a comprar y mantener", "estado": "pendiente"},
+  {"fecha": "2027-03-29", "nombre": "Revisión de 6 meses, con una micro-prueba de ejecución ya hecha en un exchange regulado", "estado": "pendiente"}
+]

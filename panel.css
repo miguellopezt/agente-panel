@@ -1,0 +1,300 @@
+/* Panel decisor: sobrio. Sin cristal, auroras, degradados decorativos ni brillos.
+   Solo transform y opacity se animan (mas color/fondo en cambios de estado). */
+
+/* Geist servida desde este repositorio (SIL OFL 1.1, ver vendor/fonts/OFL.txt): el navegador
+   del visitante no contacta con ningun tercero para pintar la pagina. Fuente variable. */
+@font-face {
+  font-family: "Geist"; font-style: normal; font-weight: 400 600; font-display: swap;
+  src: url("vendor/fonts/geist-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Geist"; font-style: normal; font-weight: 400 600; font-display: swap;
+  src: url("vendor/fonts/geist-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --fondo: #F6F7F9;
+  --superficie: #FFFFFF;
+  --borde: #E4E7EC;
+  --texto: #101828;
+  --texto-2: #667085;
+  --acento: #2E5BFF;
+  --compra: #12B76A;
+  --venta: #F04438;
+  --neutral: #F79009;
+  --superficie-2: #F2F4F7;
+  --radio: 10px;
+  --radio-g: 12px;
+  --radio-p: 8px;
+  --sombra: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --curva: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --curva-salida: cubic-bezier(0.32, 0.72, 0, 1);
+  --fuente: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #0C0D10;
+    --superficie: #16181D;
+    --borde: #262A31;
+    --texto: #F2F4F7;
+    --texto-2: #98A2B3;
+    --superficie-2: #1D2026;
+    --sombra: none;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--fondo); color: var(--texto);
+  font: 400 15px/1.5 var(--fuente); font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p { margin: 0; }
+button { font: inherit; color: inherit; }
+.num, td, th, .valor { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+/* --- Estructura --------------------------------------------------------------------- */
+.contenedor { max-width: 1180px; margin: 0 auto; padding: 16px 16px 96px; }
+.cabecera {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+  padding: 12px 0 16px;
+}
+.cabecera h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; margin-right: auto; }
+.cabecera .grupo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.rejilla { display: grid; gap: 16px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.col-12 { grid-column: span 12; } .col-8 { grid-column: span 8; } .col-6 { grid-column: span 6; }
+.col-4 { grid-column: span 4; }
+
+.tarjeta {
+  background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-g);
+  padding: 16px; box-shadow: var(--sombra); min-width: 0;
+}
+.tarjeta > .titulo {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--texto-2); margin-bottom: 12px;
+}
+.sub { color: var(--texto-2); font-size: 13px; }
+.fuerte { font-weight: 600; }
+
+.saltar { position: absolute; left: -9999px; top: 8px; z-index: 60; }
+.saltar:focus { left: 12px; }
+
+/* --- Etiquetas de estado (color + icono, nunca solo color) ------------------------------ */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
+  border-radius: 999px; border: 1px solid var(--borde); background: var(--superficie);
+  font-size: 13px; font-weight: 500; color: var(--texto);
+  transition: color 200ms var(--curva), background-color 200ms var(--curva), border-color 200ms var(--curva);
+}
+.chip svg, .icono { width: 14px; height: 14px; flex: none; }
+[data-estado="ok"], [data-estado="compra"], [data-estado="comprar"], [data-estado="lista"],
+[data-estado="ejecutada"], [data-estado="esperando"], [data-estado="hecho"] { --e: var(--compra); }
+[data-estado="alerta"], [data-estado="venta"], [data-estado="reducir"], [data-estado="cambios"],
+[data-estado="bloqueado"], [data-estado="parado"], [data-estado="error"], [data-estado="descartada"] { --e: var(--venta); }
+[data-estado="aviso"], [data-estado="mantener"], [data-estado="revision"], [data-estado="trabajando"],
+[data-estado="plan"], [data-estado="pendiente"], [data-estado="demo"] { --e: var(--neutral); }
+[data-estado="fuera"], [data-estado="vacio"], [data-estado="sindato"] { --e: var(--texto-2); }
+.chip[data-estado] { color: var(--e); border-color: color-mix(in srgb, var(--e) 35%, var(--borde));
+  background: color-mix(in srgb, var(--e) 8%, var(--superficie)); }
+.punto { width: 8px; height: 8px; border-radius: 50%; background: var(--e, var(--texto-2));
+  transition: background-color 200ms var(--curva); flex: none; }
+
+/* --- Botones ------------------------------------------------------------------------------ */
+.boton {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 36px; padding: 0 14px; border-radius: var(--radio-p); cursor: pointer;
+  background: var(--superficie); border: 1px solid var(--borde); color: var(--texto);
+  font-size: 14px; font-weight: 500; line-height: 1;
+  transition: transform 120ms var(--curva), background-color 160ms var(--curva),
+              border-color 160ms var(--curva), opacity 160ms var(--curva), color 160ms var(--curva);
+  -webkit-tap-highlight-color: transparent;
+}
+.boton:hover { background: var(--superficie-2); }
+.boton:active { transform: scale(0.98); }
+.boton:focus-visible, .seg button:focus-visible, .pestana:focus-visible, .capa:focus-visible,
+a:focus-visible, .fila-click:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+.boton { position: relative; overflow: hidden; }
+.boton[data-estado-boton="cargando"] { opacity: 0.75; pointer-events: none; }
+.boton[data-estado-boton="cargando"]::after {          /* barra de progreso de una sola pasada, sin bucle */
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--acento);
+  transform-origin: left; transform: scaleX(0.85); animation: avance 1400ms var(--curva-salida) 1;
+}
+@keyframes avance { from { transform: scaleX(0); } to { transform: scaleX(0.85); } }
+.boton[data-estado-boton="ok"] { border-color: var(--compra); color: var(--compra); }
+.boton:disabled, .boton[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+.boton.principal { background: var(--acento); border-color: var(--acento); color: #fff; }
+.boton.principal:hover { background: color-mix(in srgb, var(--acento) 88%, #000); }
+
+/* --- Control segmentado con indicador deslizante --------------------------------------------- */
+.seg { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  padding: 3px; border-radius: var(--radio);
+  background: var(--superficie-2); border: 1px solid var(--borde); }
+.seg button { position: relative; z-index: 1; min-height: 32px; padding: 0 12px; border: 0;
+  background: transparent; cursor: pointer; border-radius: var(--radio-p); font-size: 13px;
+  font-weight: 500; color: var(--texto-2); transition: color 160ms var(--curva), transform 120ms var(--curva); }
+.seg button:active { transform: scale(0.98); }
+.seg button[aria-pressed="true"], .seg button[aria-selected="true"] { color: var(--texto); }
+.seg .indicador { position: absolute; z-index: 0; top: 3px; left: 0; height: calc(100% - 6px);
+  border-radius: var(--radio-p); background: var(--superficie); border: 1px solid var(--borde);
+  transform: translateX(var(--x, 0)); width: var(--w, 0); }
+.seg.listo .indicador { transition: transform 260ms var(--curva-salida); }   /* solo transform */
+
+/* --- Capas del grafico ------------------------------------------------------------------------- */
+.capas { display: flex; flex-wrap: wrap; gap: 8px; }
+.capa { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px;
+  border-radius: 999px; border: 1px solid var(--borde); background: var(--superficie);
+  color: var(--texto-2); font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: transform 120ms var(--curva), color 160ms var(--curva), background-color 160ms var(--curva),
+              border-color 160ms var(--curva); }
+.capa:active { transform: scale(0.98); }
+.capa[aria-pressed="true"] { color: var(--acento); border-color: var(--acento);
+  background: color-mix(in srgb, var(--acento) 8%, var(--superficie)); }
+.capa[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+
+/* --- Te espera -------------------------------------------------------------------------------- */
+.lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.decision { border: 1px solid var(--borde); border-radius: var(--radio); padding: 12px; }
+.decision .pregunta { font-weight: 600; }
+.decision .contexto { color: var(--texto-2); font-size: 13px; margin: 4px 0 10px; }
+.opciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.opciones .boton[data-recomendada="true"] { border-color: var(--acento); }
+.opciones .boton .tag { font-size: 11px; color: var(--acento); font-weight: 600; }
+.fila { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 0; border-top: 1px solid var(--borde); min-width: 0; }
+.fila:first-child { border-top: 0; }
+.fila > .principal { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+
+/* --- Carteras ----------------------------------------------------------------------------------- */
+.carteras { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cartera .valor { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.cartera.b { border-color: var(--acento); }
+.delta { font-size: 13px; font-weight: 500; }
+.delta.pos { color: var(--compra); } .delta.neg { color: var(--venta); } .delta.cero { color: var(--texto-2); }
+
+/* --- Activos ------------------------------------------------------------------------------------- */
+.activos { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.activo .senal { display: flex; align-items: center; gap: 10px; font-size: 24px; font-weight: 600;
+  letter-spacing: -0.02em; color: var(--e); transition: color 200ms var(--curva); }
+.activo .senal svg { width: 22px; height: 22px; }
+.barra { position: relative; height: 8px; border-radius: 999px; background: var(--superficie-2);
+  border: 1px solid var(--borde); overflow: hidden; }
+.barra > i { position: absolute; inset: 0 auto 0 0; width: 100%; background: var(--acento);
+  transform-origin: left; transform: scaleX(var(--p, 0)); transition: transform 360ms var(--curva-salida); }
+.barra > b { position: absolute; top: -2px; bottom: -2px; left: calc(var(--o, 0) * 100%); width: 2px;
+  background: var(--texto); }
+.datos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 12px; }
+.datos dt { color: var(--texto-2); font-size: 12px; } .datos dd { margin: 0; font-weight: 500; }
+
+/* --- Grafico -------------------------------------------------------------------------------------- */
+.controles { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 12px; }
+.grafico-marco { position: relative; }
+#grafico { width: 100%; height: 420px; opacity: 1; transform: translateY(0);
+  transition: opacity 220ms var(--curva), transform 220ms var(--curva); }
+#grafico.entrando { opacity: 0; transform: translateY(6px); }
+#grafico.cambiando { opacity: 0.55; }
+.tooltip { position: absolute; z-index: 5; left: 0; top: 0; pointer-events: none; min-width: 150px;
+  padding: 8px 10px; border-radius: var(--radio-p); background: var(--superficie);
+  border: 1px solid var(--borde); font-size: 12.5px; box-shadow: var(--sombra);
+  opacity: 0; will-change: transform; }
+.tooltip.visible { opacity: 1; }
+.tooltip .t-fecha { color: var(--texto-2); margin-bottom: 4px; }
+.tooltip .t-fila { display: flex; justify-content: space-between; gap: 16px; }
+.leyenda { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12.5px; color: var(--texto-2); }
+.leyenda i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+/* --- Tablas y listas ------------------------------------------------------------------------------- */
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { text-align: left; color: var(--texto-2); font-weight: 500; font-size: 12px; padding: 0 8px 8px 0; }
+td { padding: 10px 8px 10px 0; border-top: 1px solid var(--borde); }
+td.der, th.der { text-align: right; }
+.fila-click { cursor: pointer; transition: background-color 120ms var(--curva); }
+.fila-click:hover td { background: var(--superficie-2); }
+.tabla-scroll { overflow-x: auto; }
+
+.medidor { display: grid; gap: 6px; margin-bottom: 14px; }
+.medidor .cab { display: flex; justify-content: space-between; font-size: 13px; }
+.hitos { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--borde); display: grid; gap: 14px; }
+.hitos li { position: relative; }
+.hitos li::before { content: ""; position: absolute; left: -20px; top: 6px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--e, var(--texto-2)); border: 2px solid var(--superficie); transition: background-color 200ms var(--curva); }
+
+/* --- Vacios -------------------------------------------------------------------------------------------- */
+.vacio { display: flex; gap: 10px; align-items: flex-start; padding: 14px; border: 1px dashed var(--borde);
+  border-radius: var(--radio); color: var(--texto-2); font-size: 13.5px; }
+.vacio svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+.vacio b { color: var(--texto); font-weight: 600; display: block; }
+
+/* --- Panel lateral ---------------------------------------------------------------------------------------- */
+.velo { position: fixed; inset: 0; background: rgba(16, 24, 40, 0.35); opacity: 0; pointer-events: none;
+  transition: opacity 200ms var(--curva); z-index: 40; }
+.velo.abierto { opacity: 1; pointer-events: auto; }
+.lateral { position: fixed; z-index: 50; top: 0; right: 0; bottom: 0; width: min(400px, 100%);
+  background: var(--superficie); border-left: 1px solid var(--borde); padding: 20px; overflow-y: auto;
+  transform: translateX(100%); visibility: hidden;
+  transition: transform 280ms var(--curva-salida), visibility 0s 280ms; }
+.lateral.abierto { transform: translateX(0); visibility: visible; transition-delay: 0s; }
+.lateral h2 { font-size: 17px; font-weight: 600; margin: 4px 0 14px; }
+.lateral .cerrar { float: right; }
+.lateral dl { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; margin: 0; }
+.lateral dt { color: var(--texto-2); } .lateral dd { margin: 0; text-align: right; font-weight: 500; }
+
+/* --- Navegacion movil ------------------------------------------------------------------------------------- */
+.navegacion { display: none; }
+footer { margin-top: 24px; color: var(--texto-2); font-size: 12.5px; }
+footer a { color: var(--texto-2); }
+
+@media (max-width: 900px) {
+  .col-8, .col-6, .col-4 { grid-column: span 12; }
+  .carteras { grid-template-columns: 1fr; }
+  #grafico { height: 320px; }
+}
+@media (max-width: 760px) {
+  .contenedor { padding: 12px 12px 112px; }
+  .rejilla { grid-template-columns: 1fr; }
+  .rejilla > [data-tab] { display: none; grid-column: auto; }
+  body[data-tab="hoy"] .rejilla > [data-tab="hoy"],
+  body[data-tab="grafico"] .rejilla > [data-tab="grafico"],
+  body[data-tab="ordenes"] .rejilla > [data-tab="ordenes"],
+  body[data-tab="equipo"] .rejilla > [data-tab="equipo"] { display: block; }
+  .navegacion {
+    display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; z-index: 30;
+    left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+    padding: 4px; border-radius: 16px; border: 1px solid var(--borde);
+    background: color-mix(in srgb, var(--superficie) 82%, transparent);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);   /* unico vidrio de la pagina */
+  }
+  .navegacion .indicador { position: absolute; top: 4px; bottom: 4px; left: 0; width: calc((100% - 8px) / 4);
+    border-radius: 12px; background: var(--superficie-2); border: 1px solid var(--borde);
+    transform: translateX(calc(4px + var(--i, 0) * 100%)); }
+  .navegacion.listo .indicador { transition: transform 280ms var(--curva-salida); }
+  .pestana { position: relative; z-index: 1; min-height: 48px; border: 0; background: transparent; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    font-size: 12px; font-weight: 500; color: var(--texto-2); border-radius: 12px;
+    transition: color 160ms var(--curva), transform 120ms var(--curva); }
+  .pestana svg { width: 20px; height: 20px; }
+  .pestana:active { transform: scale(0.98); }
+  .pestana[aria-selected="true"] { color: var(--acento); }
+  .boton, .capa, .seg button { min-height: 44px; }
+  .seg button { padding: 0 14px; }
+  .cabecera h1 { width: 100%; }
+}
+
+/* --- Transiciones de vista (con respaldo si el navegador no las tiene) -------------------------------------- */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 180ms; animation-timing-function: var(--curva); }
+
+/* --- Movimiento reducido: fuera desplazamientos y animaciones no esenciales ------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; transition-delay: 0s !important;
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  #grafico.entrando { transform: none; }
+  .lateral { transition: visibility 0s; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+}

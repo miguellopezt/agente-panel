@@ -1,504 +1,100 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark light">
-<title>Agente · panel</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.min.css">
-<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.iife.min.js"></script>
-<style>
-  :root {
-    --bg: #0f1115; --card: #181b22; --borde: #262a33; --texto: #e6e8eb; --suave: #9aa1ab;
-    --up: #2fbf71; --down: #ef5350; --ok-bg: #12351f; --mal-bg: #3d1618; --enlace: #7ab7ff;
-    --serie-a: #5aa9ff; --serie-b: #f5a524; --serie-ref: #9aa1ab;
-  }
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg: #f5f6f8; --card: #ffffff; --borde: #e1e4e8; --texto: #1b1f24; --suave: #5f6770;
-      --up: #1a8f4c; --down: #c62828; --ok-bg: #e3f5ea; --mal-bg: #fde8e8; --enlace: #0b5cad;
-      --serie-a: #1f6fd1; --serie-b: #b86e00; --serie-ref: #6b737c;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--texto);
-    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  }
-  main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 40px; }
-  h1 { font-size: 1.15rem; margin: 4px 0 12px; }
-  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); margin: 24px 0 8px; }
-  .caja { background: var(--card); border: 1px solid var(--borde); border-radius: 10px; padding: 12px; }
-  .suave { color: var(--suave); font-size: .85rem; }
-  .num { font-variant-numeric: tabular-nums; }
-
-  #estado { border-radius: 10px; padding: 12px; border: 1px solid var(--borde); }
-  #estado.ok { background: var(--ok-bg); } #estado.mal { background: var(--mal-bg); }
-  #estado .titulo { font-weight: 600; font-size: 1.05rem; }
-  #estado ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; }
-  #estado li { display: flex; gap: 8px; font-size: .9rem; }
-  #estado li .marca { width: 1.2em; flex: none; }
-  #actualizado { margin-top: 8px; }
-  #actualizado.viejo { color: var(--down); font-weight: 600; }
-
-  .rejilla { display: grid; gap: 10px; grid-template-columns: 1fr; }
-  @media (min-width: 560px) { .rejilla { grid-template-columns: repeat(2, 1fr); } }
-  @media (min-width: 900px) { .rejilla { grid-template-columns: repeat(3, 1fr); } }
-  .par .cab { display: flex; justify-content: space-between; align-items: baseline; }
-  .par .nombre { font-weight: 600; }
-  .par .precio { font-size: 1.25rem; font-weight: 600; }
-  .par .vars { display: flex; gap: 14px; font-size: .85rem; margin: 2px 0 6px; }
-  .up { color: var(--up); } .down { color: var(--down); }
-  .mini { height: 56px; }
-  .mini .u-legend { display: none; }
-
-  table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--borde); }
-  th { color: var(--suave); font-weight: 500; }
-  td.der, th.der { text-align: right; }
-  tr:last-child td { border-bottom: 0; }
-
-  #noticias { list-style: none; margin: 0; padding: 0; }
-  #noticias li { padding: 8px 0; border-bottom: 1px solid var(--borde); }
-  #noticias li:last-child { border-bottom: 0; }
-  #noticias a { color: var(--enlace); text-decoration: none; }
-  #noticias a:hover { text-decoration: underline; }
-  .etiqueta { display: inline-block; font-size: .72rem; padding: 0 6px; border-radius: 4px;
-              border: 1px solid var(--borde); color: var(--suave); margin-right: 4px; }
-  #error { display: none; color: var(--down); margin: 8px 0; }
-  .desliza { overflow-x: auto; }
-  table.sim th.grupo { text-align: center; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em;
-                       border-bottom: 1px solid var(--borde); padding-bottom: 2px; }
-  table.sim th.corte, table.sim td.corte { padding-left: 16px; }
-  table.sim .desc { display: block; font-size: .78rem; color: var(--suave); margin-left: 16px; }
-  table.sim td { vertical-align: top; }
-  table.sim td.der, table.sim th { white-space: nowrap; }
-  table.sim td:first-child { min-width: 190px; }
-  .subtitulo { font-size: .85rem; color: var(--suave); margin: 16px 0 4px; }
-  #sim-grafico { margin-bottom: 8px; }
-  #sim-grafico .u-legend { display: none; }
-  table.senal th, table.senal td { white-space: nowrap; }
-  #senal-nota { margin-top: 6px; }
-  .estado-par { display: inline-block; font-size: .78rem; padding: 0 8px; border-radius: 4px; font-weight: 600; }
-  .estado-par.dentro { background: var(--ok-bg); color: var(--up); }
-  .estado-par.fuera { background: var(--mal-bg); color: var(--down); }
-  table.ejec th, table.ejec td { white-space: nowrap; }
-  #ejec-nota { margin-top: 6px; }
-  .muestra { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<title>Panel decisor · agente de trading</title>
+<link rel="preload" href="vendor/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="panel.css">
 </head>
-<body>
-<main>
-  <h1>Agente de trading</h1>
+<body data-tab="hoy">
+<a class="boton saltar" href="#principal">Saltar al contenido</a>
+<div class="contenedor" id="principal">
+  <header class="cabecera" id="cabecera" aria-live="polite"></header>
+  <div id="error" hidden></div>
 
-  <section id="estado" class="caja" aria-live="polite">
-    <div class="titulo">Cargando…</div>
-    <ul id="comprobaciones"></ul>
-    <div id="actualizado" class="suave"></div>
-  </section>
-  <p id="error" role="alert"></p>
+  <main class="rejilla">
+    <section class="tarjeta col-12" data-tab="hoy" aria-labelledby="t-espera">
+      <div class="titulo"><h2 id="t-espera" style="font-size:inherit">Te espera</h2>
+        <button type="button" class="boton" id="actualizar" data-estado-boton="reposo">Actualizar</button></div>
+      <div id="espera"></div>
+    </section>
 
-  <h2>Pares</h2>
-  <div id="pares" class="rejilla"></div>
+    <section class="col-12" data-tab="hoy" aria-label="Valor de las carteras">
+      <div id="carteras"></div>
+    </section>
 
-  <h2>Señal</h2>
-  <div class="caja">
-    <div id="senal-vacia" class="suave">Aún no hay señal del simulador.</div>
-    <div id="senal-contenido">
-      <div class="desliza"><table class="senal">
-        <thead><tr><th>Par</th><th class="der">Cierre</th><th class="der">Media 200 d</th><th>Tendencia</th>
-                   <th class="der">Vol. EWMA 30 d</th><th class="der">Tamaño objetivo</th></tr></thead>
-        <tbody id="senal"></tbody>
-      </table></div>
-      <div id="senal-nota" class="suave"></div>
-    </div>
-  </div>
+    <section class="col-12" data-tab="hoy" aria-label="Señales por activo">
+      <div id="activos"></div>
+    </section>
 
-  <h2>Carteras simuladas (sin dinero real)</h2>
-  <div class="caja">
-    <div id="sim-vacia" class="suave">La simulación aún no ha empezado.</div>
-    <div id="sim-contenido">
-      <div class="desliza"><table class="sim">
-        <thead>
-          <tr><th rowspan="2">Cartera</th><th colspan="3" class="grupo">Resultado</th><th colspan="3" class="grupo corte">Posición</th></tr>
-          <tr><th class="der">Valor</th><th class="der">Rentab.</th><th class="der">Caída máx.</th>
-              <th class="der corte">BTC</th><th class="der">ETH</th><th class="der">Efectivo</th></tr>
-        </thead>
-        <tbody id="simulacion"></tbody>
-      </table></div>
-      <div class="subtitulo">Rentabilidad desde el inicio</div>
-      <div id="sim-grafico"></div>
-      <div id="sim-nota" class="suave"></div>
-    </div>
-  </div>
+    <section class="tarjeta col-12" data-tab="grafico" aria-labelledby="t-grafico">
+      <div class="titulo"><h2 id="t-grafico" style="font-size:inherit">Gráfico</h2></div>
+      <div class="controles">
+        <div class="seg" id="vistas" role="group" aria-label="Qué mostrar"></div>
+        <div class="seg" id="periodos" role="group" aria-label="Periodo"></div>
+      </div>
+      <div class="capas" id="capas" role="group" aria-label="Capas del gráfico" style="margin-bottom:12px"></div>
+      <div id="aviso-grafico" hidden></div>
+      <div class="grafico-marco">
+        <div id="grafico" class="entrando" role="img" aria-label="Gráfico de carteras y precios"></div>
+        <div id="tooltip" class="tooltip" aria-hidden="true"></div>
+      </div>
+      <div class="leyenda" id="leyenda"></div>
+    </section>
 
-  <h2>Ejecutor demo (Binance Demo Mode, sin dinero real)</h2>
-  <div class="caja">
-    <div id="ejec-vacio" class="suave">El ejecutor aún no ha operado.</div>
-    <div id="ejec-contenido">
-      <div class="desliza"><table class="ejec">
-        <thead><tr><th class="der">Valor</th><th class="der">Rentab.</th>
-                   <th class="der">BTC</th><th class="der">ETH</th><th class="der">Efectivo</th></tr></thead>
-        <tbody id="ejec-resumen"></tbody>
-      </table></div>
-      <div class="subtitulo">Órdenes de los últimos 7 días</div>
-      <div id="ejec-sin-ordenes" class="suave">Sin órdenes en los últimos 7 días.</div>
-      <div class="desliza"><table class="ejec" id="ejec-tabla-ordenes">
-        <thead><tr><th>Día</th><th>Par</th><th>Lado</th><th class="der">Nominal</th>
-                   <th class="der">Precio medio</th><th class="der">Comisión</th></tr></thead>
-        <tbody id="ejec-ordenes"></tbody>
-      </table></div>
-      <div class="subtitulo">Conciliación diaria con la cartera B simulada</div>
-      <div class="desliza"><table class="ejec">
-        <thead><tr><th>Día</th><th class="der">Δ peso BTC</th><th class="der">Δ peso ETH</th>
-                   <th class="der">Rentab. ejecutor</th><th class="der">Rentab. B</th><th class="der">Diferencia</th></tr></thead>
-        <tbody id="ejec-conciliacion"></tbody>
-      </table></div>
-      <div id="ejec-nota" class="suave"></div>
-    </div>
-  </div>
+    <section class="tarjeta col-8" data-tab="ordenes" aria-labelledby="t-ordenes">
+      <div class="titulo"><h2 id="t-ordenes" style="font-size:inherit">Órdenes</h2></div>
+      <div id="ordenes"></div>
+    </section>
 
-  <h2>Derivados</h2>
-  <div class="caja"><table>
-    <thead><tr><th>Par</th><th class="der">Funding</th><th class="der">Open interest</th></tr></thead>
-    <tbody id="derivados"></tbody>
-  </table></div>
+    <section class="tarjeta col-4" data-tab="ordenes" aria-labelledby="t-riesgo">
+      <div class="titulo"><h2 id="t-riesgo" style="font-size:inherit">Riesgo</h2></div>
+      <div id="riesgo"></div>
+    </section>
 
-  <h2>Últimas noticias</h2>
-  <div class="caja"><ul id="noticias"></ul></div>
+    <section class="tarjeta col-4" data-tab="equipo" aria-labelledby="t-agentes">
+      <div class="titulo"><h2 id="t-agentes" style="font-size:inherit">Agentes</h2></div>
+      <div id="agentes"></div>
+    </section>
 
-  <h2>Últimas ejecuciones</h2>
-  <div class="caja"><table>
-    <thead><tr><th>Hora</th><th>Fuente</th><th>Estado</th><th class="der">Filas</th></tr></thead>
-    <tbody id="ejecuciones"></tbody>
-  </table></div>
-</main>
+    <section class="tarjeta col-4" data-tab="equipo" aria-labelledby="t-ramas">
+      <div class="titulo"><h2 id="t-ramas" style="font-size:inherit">Ramas</h2></div>
+      <div id="ramas"></div>
+    </section>
 
-<script>
-"use strict";
-const URL_ESTADO = "https://raw.githubusercontent.com/miguellopezt/agente-panel/datos/estado.json";
-const RECARGA_MS = 5 * 60 * 1000;
-const VIEJO_MIN = 30;
-let generado = null;
-const graficos = {};
+    <section class="tarjeta col-4" data-tab="equipo" aria-labelledby="t-hitos">
+      <div class="titulo"><h2 id="t-hitos" style="font-size:inherit">Hitos hasta abril de 2027</h2></div>
+      <div id="hitos"></div>
+    </section>
+  </main>
 
-// Todo el texto externo (titulos, urls, fuentes) entra por textContent o por
-// atributos validados: nunca innerHTML.
-function el(tag, props = {}, ...hijos) {
-  const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else e.setAttribute(k, v);
-  }
-  for (const h of hijos) if (h != null) e.append(h);
-  return e;
-}
-const vaciar = (id) => { const e = document.getElementById(id); e.replaceChildren(); return e; };
-const hora = (iso) => new Date(iso).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-const fecha = (iso) => new Date(iso).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  <footer>
+    <span id="actualizado-pie"></span> · Simulación y modo demo: no es asesoramiento financiero ·
+    Gráficos con <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView Lightweight Charts™</a>
+    (Apache 2.0).
+  </footer>
+</div>
 
-function precio(x) {
-  const dec = x >= 1000 ? 2 : x >= 10 ? 2 : x >= 1 ? 4 : 5;
-  return x.toLocaleString("es-ES", { minimumFractionDigits: dec, maximumFractionDigits: dec });
-}
-const fijo = (x, d) => x.toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
-function variacion(v) {
-  if (v == null) return el("span", { class: "suave", text: "—", title: "sin datos suficientes todavía" });
-  const signo = v > 0 ? "▲ +" : v < 0 ? "▼ " : "";
-  return el("span", { class: v > 0 ? "up" : v < 0 ? "down" : "", text: signo + fijo(v, 2) + " %" });
-}
-function compacto(x) {
-  return x.toLocaleString("es-ES", { notation: "compact", maximumFractionDigits: 2 });
-}
+<div class="velo" id="velo"></div>
+<aside class="lateral" id="lateral" role="dialog" aria-modal="true" aria-labelledby="lateral-titulo" aria-hidden="true"></aside>
+<div id="anuncio" class="sr" role="status" aria-live="polite" style="position:absolute;left:-9999px"></div>
 
-function pintarEstado(e) {
-  const caja = document.getElementById("estado");
-  const cal = e.calidad;
-  const titulo = caja.querySelector(".titulo");
-  const lista = vaciar("comprobaciones");
-  if (!cal) {
-    caja.className = "caja mal"; titulo.textContent = "Sin datos de calidad";
-  } else {
-    caja.className = "caja " + (cal.ok ? "ok" : "mal");
-    const malas = cal.comprobaciones.filter((c) => !c.ok).length;
-    titulo.textContent = cal.ok ? "Todo en orden" : `${malas} comprobación${malas > 1 ? "es" : ""} en fallo`;
-    for (const c of cal.comprobaciones) {
-      lista.append(el("li", {},
-        el("span", { class: "marca " + (c.ok ? "up" : "down"), text: c.ok ? "✓" : "✗" }),
-        el("span", {}, el("strong", { text: c.nombre }),
-          c.detalle ? el("span", { class: "suave", text: " · " + c.detalle }) : null)));
-    }
-    lista.append(el("li", { class: "suave" }, "Comprobado " + fecha(cal.generado)));
-  }
-}
+<nav class="navegacion" aria-label="Secciones">
+  <span class="indicador" aria-hidden="true"></span>
+  <button type="button" class="pestana" data-tab="hoy" aria-selected="true">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 9L10 3.5 16.5 9v7a1 1 0 01-1 1h-11a1 1 0 01-1-1V9z"/></svg>Hoy</button>
+  <button type="button" class="pestana" data-tab="grafico" aria-selected="false">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 15l4.5-5 3 3L17 5"/></svg>Gráfico</button>
+  <button type="button" class="pestana" data-tab="ordenes" aria-selected="false">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12M4 10h12M4 15h8"/></svg>Órdenes</button>
+  <button type="button" class="pestana" data-tab="equipo" aria-selected="false">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="7" r="2.5"/><circle cx="14" cy="8" r="2"/><path d="M3 16c.5-3 2.5-4.5 4.5-4.5S11.500 13 12 16M12.500 12c2-.5 4 .5 4.500 3.500"/></svg>Equipo</button>
+</nav>
 
-function pintarActualizado() {
-  if (!generado) return;
-  const min = (Date.now() - new Date(generado).getTime()) / 60000;
-  const d = document.getElementById("actualizado");
-  d.textContent = `Actualizado ${fecha(generado)} (hace ${Math.max(0, Math.round(min))} min)` +
-                  (min > VIEJO_MIN ? " — datos antiguos" : "");
-  d.className = min > VIEJO_MIN ? "viejo" : "suave";
-}
-
-function mini(contenedor, par, serie, color) {
-  const ancho = contenedor.clientWidth || 280;
-  const datos = [serie.t, serie.c];
-  if (graficos[par]) { graficos[par].destroy(); }
-  graficos[par] = new uPlot({
-    width: ancho, height: 56, legend: { show: false }, cursor: { show: false },
-    padding: [4, 0, 4, 0],
-    scales: { x: { time: true } },
-    axes: [{ show: false }, { show: false }],
-    series: [{}, { stroke: color, width: 1.5, points: { show: false } }],
-  }, datos, contenedor);
-}
-
-function pintarPares(e) {
-  const cont = vaciar("pares");
-  const estilos = getComputedStyle(document.documentElement);
-  for (const [par, p] of Object.entries(e.pares)) {
-    const tarjeta = el("div", { class: "caja par" });
-    if (!p) { tarjeta.append(el("div", { class: "nombre", text: par }), el("div", { class: "suave", text: "sin datos" })); cont.append(tarjeta); continue; }
-    const grafico = el("div", { class: "mini" });
-    tarjeta.append(
-      el("div", { class: "cab" },
-        el("span", { class: "nombre", text: par.replace("USDT", "") + " / USDT" }),
-        el("span", { class: "precio num", text: precio(p.precio) })),
-      el("div", { class: "vars num" },
-        el("span", {}, "1 h ", variacion(p.var_1h)),
-        el("span", {}, "24 h ", variacion(p.var_24h))),
-      grafico,
-      el("div", { class: "suave", text: `${p.serie_5m.t.length} puntos de 5 min · última vela ${hora(p.ts)}` }));
-    cont.append(tarjeta);
-    const sube = p.serie_5m.c.length > 1 && p.serie_5m.c.at(-1) >= p.serie_5m.c[0];
-    requestAnimationFrame(() => mini(grafico, par, p.serie_5m,
-      estilos.getPropertyValue(sube ? "--up" : "--down").trim()));
-  }
-}
-
-const CARTERAS = [
-  ["regla", "A · regla", "--serie-a", "Tendencia 200 d × tamaño por volatilidad, reequilibrio diario"],
-  ["ejecutable", "B · ejecutable", "--serie-b", "Como A, con banda del 20 % y orden mínima de 10 $"],
-  ["comprar_mantener", "Comprar y mantener", "--serie-ref", "Referencia: BTC + ETH a partes iguales, sin operar"],
-];
-const REVISIONES = "29-dic-2026 y 29-mar-2027";
-const DIA = 86400;
-let graficoSim = null;
-const pct = (x) => (x > 0 ? "+" : "") + fijo(x * 100, 1) + " %";
-
-function pintarSimulacion(e) {
-  const sim = e.simulacion;
-  const tb = vaciar("simulacion");
-  const cont = document.getElementById("sim-grafico");
-  const hay = sim && Object.values(sim).some((c) => c.serie.fecha.length);
-  document.getElementById("sim-vacia").style.display = hay ? "none" : "block";
-  document.getElementById("sim-contenido").style.display = hay ? "block" : "none";
-  if (graficoSim) { graficoSim.destroy(); graficoSim = null; }
-  if (!hay) return;
-  const estilos = getComputedStyle(document.documentElement);
-  const color = (v) => estilos.getPropertyValue(v).trim();
-  // Eje comun: todas las fechas de todas las carteras (UTC, en segundos)
-  const fechas = [...new Set(CARTERAS.flatMap(([k]) => sim[k] ? sim[k].serie.fecha : []))].sort();
-  const x = fechas.map((f) => Date.parse(f + "T00:00:00Z") / 1000);
-  const series = [{}], datos = [x];
-  for (const [k, nombre, v, desc] of CARTERAS) {
-    const c = sim[k];
-    if (!c) continue;
-    // Rentabilidad en % sobre el capital inicial: las tres curvas parten de 0
-    const porFecha = Object.fromEntries(c.serie.fecha.map((f, i) => [f, (c.serie.valor_usd[i] / c.capital_usd - 1) * 100]));
-    datos.push(fechas.map((f) => porFecha[f] ?? null));
-    series.push({ label: nombre, stroke: color(v), width: 2, points: { show: fechas.length < 3, size: 7 } });
-    const pos = c.posicion || {};
-    // El coste de la compra sale del efectivo: puede quedar en -0,1 %, se muestra como 0 %
-    const peso = (p) => !pos[p] ? "—" : Math.abs(pos[p].peso) < 0.005 ? "0 %" : fijo(pos[p].peso * 100, 0) + " %";
-    tb.append(el("tr", {},
-      el("td", {}, el("span", { class: "muestra", style: "background:" + color(v) }), nombre,
-        el("span", { class: "desc", text: desc })),
-      el("td", { class: "der num", text: fijo(c.valor_usd, 2) + " $" }),
-      el("td", { class: "der num " + (c.rentabilidad >= 0 ? "up" : "down"), text: pct(c.rentabilidad) }),
-      el("td", { class: "der num down", text: pct(c.caida_maxima) }),
-      el("td", { class: "der num corte", text: peso("BTCUSDT") }),
-      el("td", { class: "der num", text: peso("ETHUSDT") }),
-      el("td", { class: "der num", text: peso("efectivo") })));
-  }
-  const alguna = Object.values(sim)[0];
-  document.getElementById("sim-nota").textContent =
-    `Desde ${alguna.inicio} con ${fijo(alguna.capital_eur, 0)} € (${fijo(alguna.capital_usd, 2)} $) por cartera · ` +
-    `decisión diaria a las 00:05 UTC · revisiones el ${REVISIONES}.`;
-  requestAnimationFrame(() => {
-    graficoSim = new uPlot({
-      width: cont.clientWidth || 600, height: 200, legend: { show: false },
-      scales: {
-        // Al menos dos semanas de eje, para que los primeros dias no se estiren
-        // (desde los datos: con un solo punto uPlot no llama a range con min/max utiles)
-        x: { time: true, auto: false, range: () => [x[0], Math.max(x.at(-1), x[0] + 14 * DIA)] },
-        // Al menos ±1 punto porcentual alrededor de las curvas, siempre con el 0 dentro
-        y: { range: (u, min, max) => {
-          const lo = Math.min(min, 0), hi = Math.max(max, 0);
-          const medio = (lo + hi) / 2, mitad = Math.max((hi - lo) / 2 * 1.15, 1);
-          return [medio - mitad, medio + mitad];
-        } },
-      },
-      axes: [{ stroke: color("--suave"), grid: { stroke: color("--borde") },
-               values: (u, vals) => vals.map((t) => new Date(t * 1000).toLocaleDateString("es-ES",
-                 { day: "numeric", month: "short" })) },
-             { stroke: color("--suave"), grid: { stroke: color("--borde") }, size: 56,
-               values: (u, vals) => vals.map((y) => fijo(y, Math.abs(u.scales.y.max - u.scales.y.min) < 4 ? 1 : 0) + " %") }],
-      series,
-    }, datos, cont);
-  });
-}
-
-// Fechas y horas de la señal siempre en UTC: la regla decide con el cierre diario UTC
-const diaUTC = (iso) => new Date(iso.length === 10 ? iso + "T00:00:00Z" : iso)
-  .toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: "UTC" });
-const horaUTC = (iso) => new Date(iso)
-  .toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
-
-function pintarSenal(e) {
-  const s = e.senal;
-  const tb = vaciar("senal");
-  document.getElementById("senal-vacia").style.display = s ? "none" : "block";
-  document.getElementById("senal-contenido").style.display = s ? "block" : "none";
-  if (!s) return;
-  for (const [par, x] of Object.entries(s.pares)) {
-    tb.append(el("tr", {},
-      el("td", { text: par.replace("USDT", "") }),
-      el("td", { class: "der num", text: precio(x.cierre) + " $" }),
-      el("td", { class: "der num", text: precio(x.media_200) + " $" }),
-      el("td", {}, el("span", { class: "estado-par " + (x.dentro ? "dentro" : "fuera"),
-                                text: x.dentro ? "dentro" : "fuera" })),
-      el("td", { class: "der num", text: fijo(x.vol_ewma * 100, 1) + " %" }),
-      el("td", { class: "der num", text: fijo(x.objetivo * 100, 0) + " %",
-                 title: `min(1; 0,40 / vol) = ${fijo(x.tamaño * 100, 0)} %` + (x.dentro ? "" : ", 0 por estar fuera de tendencia") })));
-  }
-  const cierre = Object.values(s.pares)[0].cierre_dia;
-  document.getElementById("senal-nota").textContent =
-    `Cierre diario UTC del ${diaUTC(cierre)} · decidida el ${diaUTC(s.ts_precio)} a las ${horaUTC(s.ts_precio)} UTC · ` +
-    `próxima decisión: ${diaUTC(s.proxima_decision)} a las ${horaUTC(s.proxima_decision)} UTC. ` +
-    `Tamaño objetivo: exposición de cada par sobre su mitad de las carteras A y B; volatilidad anualizada.`;
-}
-
-// Puntos porcentuales con signo (diferencias de peso y de rentabilidad)
-const pp = (x) => (x > 0 ? "+" : "") + fijo(x * 100, 2) + " pp";
-const pct2 = (x) => (x > 0 ? "+" : "") + fijo(x * 100, 2) + " %";
-const clase = (x) => x > 0 ? "up" : x < 0 ? "down" : "";
-
-function pintarEjecutor(e) {
-  const x = e.ejecutor_demo;
-  document.getElementById("ejec-vacio").style.display = x ? "none" : "block";
-  document.getElementById("ejec-contenido").style.display = x ? "block" : "none";
-  if (!x) return;
-  const m = x.moneda;
-  const peso = (k) => x.pesos[k] == null ? "—" : fijo(x.pesos[k] * 100, 1) + " %";
-  vaciar("ejec-resumen").append(el("tr", {},
-    el("td", { class: "der num", text: fijo(x.valor, 2) + " " + m }),
-    el("td", { class: "der num " + clase(x.rentabilidad), text: pct2(x.rentabilidad) }),
-    el("td", { class: "der num", text: peso("BTC" + m) }),
-    el("td", { class: "der num", text: peso("ETH" + m) }),
-    el("td", { class: "der num", text: peso("efectivo") })));
-  const to = vaciar("ejec-ordenes");
-  document.getElementById("ejec-sin-ordenes").style.display = x.ordenes.length ? "none" : "block";
-  document.getElementById("ejec-tabla-ordenes").style.display = x.ordenes.length ? "table" : "none";
-  for (const o of x.ordenes) {
-    to.append(el("tr", {},
-      el("td", { text: diaUTC(o.fecha) }),
-      el("td", { text: o.par.replace(m, "") }),
-      el("td", { class: o.lado === "compra" ? "up" : "down", text: o.lado }),
-      el("td", { class: "der num", text: fijo(o.nominal, 2) + " " + m }),
-      el("td", { class: "der num", text: precio(o.precio_medio) }),
-      el("td", { class: "der num", text: o.comision == null ? "—" : fijo(o.comision, 3) + " " + m })));
-  }
-  const tc = vaciar("ejec-conciliacion");
-  for (const c of [...x.conciliacion].reverse()) {
-    tc.append(el("tr", {},
-      el("td", { text: diaUTC(c.fecha) }),
-      el("td", { class: "der num", text: pp(c.dif_pesos.BTC ?? 0) }),
-      el("td", { class: "der num", text: pp(c.dif_pesos.ETH ?? 0) }),
-      el("td", { class: "der num " + clase(c.rent_ejecutor), text: pct2(c.rent_ejecutor) }),
-      el("td", { class: "der num " + clase(c.rent_b), text: pct2(c.rent_b) }),
-      el("td", { class: "der num " + clase(c.dif_rent), text: pp(c.dif_rent) })));
-  }
-  document.getElementById("ejec-nota").textContent =
-    `Réplica de la cartera B desde el ${diaUTC(x.inicio)} con ${fijo(x.capital, 0)} ${m} · ` +
-    `decisión diaria a las 00:10 UTC · comisiones incluidas. Δ peso: ejecutor menos B el mismo día. ` +
-    `Rentabilidad de B medida desde su valor del día de inicio del ejecutor.`;
-}
-
-function pintarDerivados(e) {
-  const tb = vaciar("derivados");
-  for (const [par, d] of Object.entries(e.derivados)) {
-    const fr = d.funding_rate * 100;
-    tb.append(el("tr", {},
-      el("td", { text: par.replace("USDT", "") }),
-      el("td", { class: "der num " + (fr > 0 ? "up" : fr < 0 ? "down" : ""), text: fijo(fr, 4) + " %" }),
-      el("td", { class: "der num", text: compacto(d.open_interest) })));
-  }
-}
-
-function enlaceSeguro(url) {
-  try { const u = new URL(url); return (u.protocol === "https:" || u.protocol === "http:") ? u.href : null; }
-  catch { return null; }
-}
-
-function pintarNoticias(e) {
-  const ul = vaciar("noticias");
-  for (const n of e.noticias) {
-    const href = enlaceSeguro(n.url);
-    const titulo = href
-      ? el("a", { href, target: "_blank", rel: "noopener noreferrer", text: n.titulo })
-      : el("span", { text: n.titulo });
-    const meta = el("div", { class: "suave" });
-    for (const p of n.pares) meta.append(el("span", { class: "etiqueta", text: p.replace("USDT", "") }));
-    meta.append(`${fecha(n.publicado)} · ${n.fuente}${n.idioma && n.idioma !== "English" ? " · " + n.idioma : ""}`);
-    ul.append(el("li", {}, titulo, meta));
-  }
-}
-
-function pintarEjecuciones(e) {
-  const tb = vaciar("ejecuciones");
-  for (const x of e.ejecuciones) {
-    tb.append(el("tr", {},
-      el("td", { class: "num", text: hora(x.inicio) }),
-      el("td", { text: x.fuente }),
-      el("td", { class: x.ok ? "up" : "down", text: x.ok ? "✓ ok" : "✗ fallo" }),
-      el("td", { class: "der num", text: x.filas == null ? "—" : String(x.filas) })));
-  }
-}
-
-async function cargar() {
-  const err = document.getElementById("error");
-  try {
-    const r = await fetch(URL_ESTADO + "?t=" + Date.now(), { cache: "no-store" });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const e = await r.json();
-    generado = e.generado;
-    pintarEstado(e); pintarActualizado(); pintarPares(e);
-    pintarSenal(e); pintarSimulacion(e); pintarEjecutor(e); pintarDerivados(e); pintarNoticias(e); pintarEjecuciones(e);
-    err.style.display = "none";
-  } catch (ex) {
-    err.textContent = "No se pudo cargar estado.json: " + ex.message;
-    err.style.display = "block";
-  }
-}
-
-cargar();
-setInterval(cargar, RECARGA_MS);
-setInterval(pintarActualizado, 30 * 1000);
-let redimension;
-window.addEventListener("resize", () => {
-  clearTimeout(redimension);
-  redimension = setTimeout(() => {
-    for (const [par, u] of Object.entries(graficos)) {
-      const cont = u.root.parentElement;
-      u.setSize({ width: cont.clientWidth, height: 56 });
-    }
-    if (graficoSim) {
-      const cont = document.getElementById("sim-grafico");
-      graficoSim.setSize({ width: cont.clientWidth, height: 220 });
-    }
-  }, 150);
-});
-</script>
+<script src="vendor/lightweight-charts.standalone.production.js"></script>
+<script src="panel.js"></script>
 </body>
 </html>
