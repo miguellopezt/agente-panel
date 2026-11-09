@@ -346,7 +346,7 @@
   /* --- Equipo ------------------------------------------------------------------------------------------------ */
 
   function renderAgentes(e) {
-    if (!e || !e.agentes || !e.agentes.length) return faltaDe(e, 'agentes', 'Sin agentes', 'No hay datos del buzón.');
+    if (!e || !e.agentes || !e.agentes.length) return faltaDe(e, 'agentes', 'Sin agentes', 'No hay datos de los agentes.');
     return e.agentes.map(function (a) {
       return '<div class="fila" data-key="agente-' + esc(a.rol) + '"><div class="principal"><span class="fuerte">' +
         esc(a.rol.charAt(0).toUpperCase() + a.rol.slice(1)) + '</span> <span class="sub">' + esc(a.modelo || 'modelo desconocido') +
