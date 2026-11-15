@@ -289,7 +289,7 @@
       var o = esNum(a.objetivo) ? Math.min(a.objetivo / escala, 1) : 0;
       var dist = esNum(a.precio) && esNum(a.ma200) && a.ma200 ? a.precio / a.ma200 - 1 : null;
       return '<div class="tarjeta activo" data-key="activo-' + esc(a.simbolo) + '" data-estado="' + esc(a.senal) + '">' +
-        '<div class="titulo"><span>' + esc(a.nombre) + ' · ' + esc(a.simbolo) + '</span>' +
+        '<div class="titulo"><span>' + esc(a.nombre) + (a.nombre === a.simbolo ? '' : ' · ' + esc(a.simbolo)) + '</span>' +
         '<span class="num fuerte">' + usd(a.precio) + ' <span class="delta ' + (a.cambio24h > 0 ? 'pos' : a.cambio24h < 0 ? 'neg' : 'cero') +
         '">' + pctFirmado(a.cambio24h, 2) + '</span></span></div>' +
         '<div class="senal">' + icono(a.senal) + '<span>' + esc(SENALES[a.senal] || a.senal) + '</span></div>' +
@@ -568,6 +568,9 @@
 
   function opcionesTema() {
     return {
+      // Locale fijo: la libreria usa navigator.language, que en algunos navegadores es invalido y
+      // hace fallar el formateo (RangeError «Incorrect locale information provided»).
+      localization: { locale: 'es-ES' },
       layout: { background: { type: 'solid', color: 'transparent' }, textColor: variable('--texto-2'),
         fontFamily: variable('--fuente') || 'sans-serif', attributionLogo: true },
       grid: { vertLines: { color: variable('--borde') }, horzLines: { color: variable('--borde') } },
@@ -664,29 +667,36 @@
     var primera = d.lineas[0];
     g.marcadores = d.marcadores;
     var cuando = animar && !reducido;
+    // Con los datos ya completos: marcadores y rango visible (si se fijaran con los datos a medio
+    // revelar, el rango se quedaria en los primeros dias)
+    function ajustar() {
+      if (primera && g.lineas[primera.id]) {
+        g.lineas[primera.id].serie.setMarkers(d.marcadores.map(function (m) {
+          return { time: m.time, position: m.position, shape: m.shape, color: m.color, text: m.text };
+        }));
+      }
+      if (primera && primera.datos.length) {
+        chart.timeScale().setVisibleRange({ from: primera.datos[0].time, to: primera.datos[primera.datos.length - 1].time });
+      }
+    }
+    var pendientes = d.lineas.length;
     d.lineas.forEach(function (l) {
       var s = g.lineas[l.id].serie;
-      if (cuando) revelar(s, l.datos); else s.setData(l.datos);
+      var fin = function () { if (--pendientes === 0) ajustar(); };
+      if (cuando) revelar(s, l.datos, fin); else { s.setData(l.datos); fin(); }
     });
-    if (primera && g.lineas[primera.id]) {
-      g.lineas[primera.id].serie.setMarkers(d.marcadores.map(function (m) {
-        return { time: m.time, position: m.position, shape: m.shape, color: m.color, text: m.text };
-      }));
-    }
-    if (primera && primera.datos.length) {
-      chart.timeScale().setVisibleRange({ from: primera.datos[0].time, to: primera.datos[primera.datos.length - 1].time });
-    }
+    if (!d.lineas.length) ajustar();
     renderLeyenda(d);
   }
 
   /* Entrada progresiva: se descubren los datos en pasos, con la escala ya fijada (sin saltos) */
-  function revelar(serie, datos) {
+  function revelar(serie, datos, fin) {
     var n = datos.length, pasos = Math.min(18, n), i = 0;
     function paso() {
       i++;
       var k = Math.max(2, Math.round(n * (1 - Math.pow(1 - i / pasos, 3))));
       serie.setData(datos.slice(0, k));
-      if (i < pasos) root.requestAnimationFrame(paso); else serie.setData(datos);
+      if (i < pasos) root.requestAnimationFrame(paso); else { serie.setData(datos); if (fin) fin(); }
     }
     paso();
   }
