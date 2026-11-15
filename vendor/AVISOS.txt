@@ -1,10 +1,13 @@
 Avisos de software de terceros incluido en esta página
 
-TradingView Lightweight Charts(TM) v4.2.0 (vendor/lightweight-charts.standalone.production.js)
-  Copyright (c) 2024 TradingView, Inc. https://www.tradingview.com/
+TradingView Lightweight Charts(TM) v5.2.1 (vendor/lightweight-charts.standalone.production.js)
+  Copyright (c) 2026 TradingView, Inc. https://www.tradingview.com/
   Licencia Apache 2.0: https://www.apache.org/licenses/LICENSE-2.0
   TradingView Lightweight Charts(TM)
   Copyright (с) 2023 TradingView, Inc. https://www.tradingview.com/
+
+liquid-glass-js v0.1.0 (vendor/liquid-glass.umd.min.js)
+  Copyright (c) 2026 Eamon Liu. Licencia MIT: vendor/liquid-glass.LICENSE
 
 Geist (vendor/fonts/geist-latin.woff2, vendor/fonts/geist-latin-ext.woff2)
   Copyright 2026 The Geist Project Authors (https://github.com/vercel/geist-font)
