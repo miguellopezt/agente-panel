@@ -6,8 +6,9 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://raw.githubusercontent.com wss://ws.bitstamp.net; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="color-scheme" content="light dark">
 <meta name="referrer" content="no-referrer">
-<meta name="theme-color" content="#E9EDF3" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#06080C" media="(prefers-color-scheme: dark)">
+<!-- Safari 26 tiñe su propia barra (Liquid Glass nativo) con el fondo de la pagina: mismo color -->
+<meta name="theme-color" content="#F4F1EA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1C1A17" media="(prefers-color-scheme: dark)">
 <title>Panel del decisor · agente de trading</title>
 <link rel="preload" href="vendor/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="panel.css">
@@ -16,11 +17,21 @@
 <body data-tab="hoy">
 <a class="boton saltar" href="#principal">Saltar al contenido</a>
 
-<header class="cabecera flotante vidrio-css">
-  <div id="cabecera"></div>
-  <button type="button" class="boton" id="actualizar" data-estado-boton="reposo" aria-label="Actualizar los datos">
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8a5 5 0 11-1.5-3.5M13 3v2.5h-2.5"/></svg>
-  </button>
+<header class="cabecera">
+  <div class="cabecera-fila">
+    <div id="cabecera"></div>
+    <button type="button" class="boton" id="actualizar" data-estado-boton="reposo" aria-label="Actualizar los datos">
+      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8a5 5 0 11-1.5-3.5M13 3v2.5h-2.5"/></svg>
+    </button>
+  </div>
+  <!-- en el movil, pestanas bajo la cabecera (opaca y fija arriba): abajo solo queda la barra del navegador -->
+  <nav class="navegacion" aria-label="Secciones">
+    <span class="ind" aria-hidden="true"></span>
+    <button type="button" class="pestana" data-tab="hoy" aria-current="page">Hoy</button>
+    <button type="button" class="pestana" data-tab="grafico">Gráfico</button>
+    <button type="button" class="pestana" data-tab="carteras">Carteras</button>
+    <button type="button" class="pestana" data-tab="proyecto">Proyecto</button>
+  </nav>
 </header>
 
 <main class="contenido" id="principal">
@@ -31,7 +42,7 @@
       <div id="espera"></div>
     </section>
 
-    <section class="tarjeta c7" data-tab="hoy" aria-labelledby="t-mercado">
+    <section class="tarjeta c7 llena" data-tab="hoy" aria-labelledby="t-mercado">
       <div class="tit"><h2 id="t-mercado">Mercado</h2></div>
       <div id="mercado"></div>
     </section>
@@ -41,17 +52,21 @@
       <div id="inferencia"></div>
     </section>
 
-    <section class="tarjeta c12" data-tab="grafico" aria-labelledby="t-grafico">
-      <div class="tit"><h2 id="t-grafico">Gráfico</h2><button type="button" class="info" data-fundamento="velas" aria-label="Qué es: velas diarias">i</button></div>
+    <section class="tarjeta c12" data-tab="grafico" id="seccion-grafico" aria-labelledby="t-grafico">
+      <div class="tit"><h2 id="t-grafico">Gráfico</h2><button type="button" class="info" data-fundamento="velas" aria-label="Qué es: velas diarias">i</button>
+        <button type="button" class="boton" id="pantalla-completa" aria-pressed="false" aria-label="Gráfico a pantalla completa">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg>
+        </button></div>
       <div class="controles">
         <div class="seg" id="vistas" role="group" aria-label="Qué mostrar"></div>
+        <div class="seg" id="intervalos" role="group" aria-label="Intervalo de vela"></div>
         <div class="seg" id="periodos" role="group" aria-label="Periodo visible"></div>
       </div>
       <div class="capas" id="capas" role="group" aria-label="Capas del gráfico" style="margin-bottom:10px"></div>
       <div id="aviso-grafico" hidden></div>
       <div class="marco-grafico">
         <div id="grafico" class="grafico" role="img" aria-label="Gráfico de velas, volumen y carteras"></div>
-        <div id="tooltip" class="tooltip vidrio-css" aria-hidden="true"></div>
+        <div id="tooltip" class="tooltip" aria-hidden="true"></div>
       </div>
       <div class="leyenda" id="leyenda"></div>
     </section>
@@ -86,9 +101,19 @@
       <div id="llamadas"></div>
     </section>
 
+    <section class="tarjeta c12" data-tab="proyecto" aria-labelledby="t-implantacion">
+      <div class="tit"><h2 id="t-implantacion">Estado de implantación</h2><button type="button" class="info" data-fundamento="implantacion" aria-label="Qué es: estado de implantación">i</button></div>
+      <div id="implantacion"></div>
+    </section>
+
     <section class="tarjeta c5" data-tab="proyecto" aria-labelledby="t-hitos">
       <div class="tit"><h2 id="t-hitos">Hitos</h2></div>
       <div id="hitos"></div>
+    </section>
+
+    <section class="tarjeta c12" data-tab="proyecto" aria-labelledby="t-avisos">
+      <div class="tit"><h2 id="t-avisos">Últimos avisos</h2></div>
+      <div id="avisos"></div>
     </section>
 
     <section class="tarjeta c7" data-tab="proyecto" aria-labelledby="t-proyecto">
@@ -109,27 +134,16 @@
   </footer>
 </main>
 
-<div class="velo" id="velo"></div>
-<section class="hoja vidrio-css" id="hoja" role="dialog" aria-modal="true" aria-labelledby="hoja-titulo" aria-hidden="true">
+<!-- Hoja de detalle: <dialog> nativo abierto con showModal(). El navegador pone la pagina inerte,
+     contiene el foco, cierra con Esc o el gesto atras y devuelve el foco a quien la abrio;
+     closedby="any" la cierra tambien al tocar fuera (con respaldo en panel.js donde no existe). -->
+<dialog class="hoja" id="hoja" closedby="any" aria-labelledby="hoja-titulo">
   <div class="asa" aria-hidden="true"></div>
-  <button type="button" class="boton" id="hoja-cerrar" style="float: right">Cerrar</button>
+  <form method="dialog" class="hoja-cab"><button class="boton" id="hoja-cerrar" autofocus>Cerrar</button></form>
   <div id="hoja-contenido"></div>
-</section>
-
-<nav class="navegacion flotante vidrio-css" aria-label="Secciones">
-  <span class="ind" aria-hidden="true"></span>
-  <button type="button" class="pestana" data-tab="hoy" aria-current="page">
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 9L10 3.5 16.5 9v7a1 1 0 01-1 1h-11a1 1 0 01-1-1V9z"/></svg>Hoy</button>
-  <button type="button" class="pestana" data-tab="grafico">
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4v12M5 7h0M10 3v14M15 5v9"/><rect x="3.5" y="7" width="3" height="5" rx=".5"/><rect x="8.5" y="5" width="3" height="7" rx=".5"/><rect x="13.5" y="8" width="3" height="4" rx=".5"/></svg>Gráfico</button>
-  <button type="button" class="pestana" data-tab="carteras">
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5.5" width="14" height="10" rx="2"/><path d="M7 5.5V4.5a1 1 0 011-1h4a1 1 0 011 1v1M3 10h14"/></svg>Carteras</button>
-  <button type="button" class="pestana" data-tab="proyecto">
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12M4 10h12M4 15h8"/></svg>Proyecto</button>
-</nav>
+</dialog>
 
 <script src="vendor/lightweight-charts.standalone.production.js" defer></script>
-<script src="vendor/liquid-glass.umd.min.js" defer></script>
 <script src="panel.js" defer></script>
 </body>
 </html>

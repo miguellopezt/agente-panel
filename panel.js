@@ -2,7 +2,8 @@
  *  - Funciones puras que convierten estado.json en HTML (texto) y en series de los graficos.
  *    No tocan el DOM: se prueban con node (tests/js/panel_test.js).
  *  - Pegamento del navegador (al final): carga estado.json cada 60 s, precio en directo por el
- *    WebSocket publico del exchange, grafico de velas, hoja de detalle, pestanas y vidrio.
+ *    WebSocket publico del exchange, grafico de velas (diario/semanal, pantalla completa), hoja
+ *    de detalle y pestanas.
  * Sin datos inventados: si falta una fuente, se muestra un estado vacio que dice que falta y
  * por que (estado.faltan). Todo texto del JSON se escapa antes de pintarlo. */
 (function (root) {
@@ -16,6 +17,7 @@
   var COLOR_CARTERA = { ejecutable: '#3550F0', regla: '#7A8494', comprar_mantener: '#B0B7C3' };
   var OBJETIVO_VOL = 0.40, BANDA = 0.20, MINIMO_ORDEN = 10;
   var POLITICA = { drawdown_backtest: -0.37, limite: -0.5 };
+  var MIN_DIAS = 90, MOTIVO_POCOS_DIAS = 'menos de 90 días de serie';   // como panel_estado.MIN_DIAS_CAGR
   var REPO_DECISIONES = 'https://github.com/miguellopezt/agente-trading/issues/new';
 
   var ICONOS = {
@@ -85,6 +87,10 @@
     return fmt(v, 0);
   }
   function fecha(iso) {
+    if (typeof iso === 'number') {          // velas intradia: segundos UNIX (UTC)
+      var t = new Date(iso * 1000);
+      return t.toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC';
+    }
     var d = new Date(String(iso).slice(0, 10) + 'T00:00:00Z');
     if (isNaN(d)) return esc(iso);
     return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -139,9 +145,11 @@
       'Rentabilidad anual compuesta: el crecimiento anual constante que llevaría del valor inicial al actual.',
       'Con menos de 90 días de historia no se calcula: anualizar un periodo tan corto da cifras engañosas.'] },
     sharpe: { titulo: 'Sharpe', texto: [
-      'Rendimiento medio diario dividido por su desviación típica, anualizado con √365. Mide rentabilidad por unidad de riesgo total.'] },
+      'Rendimiento medio diario dividido por su desviación típica, anualizado con √365. Mide rentabilidad por unidad de riesgo total.',
+      'Con menos de 90 días de historia no se muestra: anualizar un periodo tan corto da cifras engañosas.'] },
     sortino: { titulo: 'Sortino', texto: [
-      'Como el Sharpe, pero solo penaliza la volatilidad de los días negativos: no castiga las subidas fuertes.'] },
+      'Como el Sharpe, pero solo penaliza la volatilidad de los días negativos: no castiga las subidas fuertes.',
+      'Con menos de 90 días de historia no se muestra, como el Sharpe y el CAGR.'] },
     caida: { titulo: 'Caída máxima', texto: [
       'La mayor pérdida desde un máximo anterior hasta un mínimo posterior. El backtest de la regla llegó a −37 %; comprar y mantener, a −80 %.',
       'Si la caída supera el −50 % se revisa la cartera (sin dejar de operar).'] },
@@ -166,7 +174,12 @@
       'Interés abierto: número de contratos abiertos. No forman parte de la regla: son contexto.'] },
     velas: { titulo: 'Velas diarias', texto: [
       'Cada vela resume un día UTC: apertura, máximo, mínimo y cierre. Verde si cerró por encima de la apertura. Debajo, el volumen negociado.',
-      'Las flechas marcan las órdenes de la cartera B. Pellizca o usa la rueda para acercar.'] },
+      'Las flechas marcan las órdenes de la cartera B: tócalas para ver su detalle. Pellizca o usa la rueda para acercar y arrastra para moverte.',
+      'Semanal: cada vela agrupa una semana de lunes a domingo (UTC) a partir de las diarias. Las velas de 4 h y 1 h llegarán cuando haya velas intradía del exchange de ejecución.',
+      'Banda de volatilidad: el cierre anterior ± una desviación típica de los rendimientos de las últimas 30 velas del intervalo elegido (30 días en diario, 30 semanas en semanal, 120 horas en 4 h, 30 horas en 1 h). Es el movimiento «normal» de una vela, así que no es comparable entre intervalos.'] },
+    implantacion: { titulo: 'Estado de implantación', texto: [
+      'Cada pieza del sistema y en qué punto está: funciona, pendiente de fusionar (el código está en revisión), pendiente de instalar (está listo, pero instalarlo requiere permisos de administrador) o falla (su última ejecución no terminó bien).',
+      'Se lee de los propios servicios del servidor cada vez que se genera el estado.'] },
     decisiones: { titulo: 'Tus decisiones', texto: [
       'El sistema no ejecuta nada con dinero real ni cambia de rumbo sin tu permiso. Al pulsar una opción se abre tu respuesta lista para enviar en el repositorio privado del proyecto; los agentes la leen de ahí.'] },
     limite: { titulo: 'Límite de revisión', texto: [
@@ -207,7 +220,7 @@
         serie: [], ma200_serie: [] };
     });
     if (!activos.length) faltan.activos = FALTA_ANTERIOR; else faltan.velas = FALTA_ANTERIOR;
-    ['ordenes', 'agentes', 'ramas', 'llamadas', 'derivados', 'demo', 'fusiones', 'estudios'].forEach(function (k) { faltan[k] = FALTA_ANTERIOR; });
+    ['ordenes', 'agentes', 'ramas', 'llamadas', 'derivados', 'demo', 'fusiones', 'estudios', 'avisos'].forEach(function (k) { faltan[k] = FALTA_ANTERIOR; });
     faltan.sombra = 'La simulación en la sombra aún no tiene datos.';
     var b = carteras.filter(function (c) { return c.id === 'ejecutable'; })[0], dd = null;
     if (b && b.serie.length > 1) { var cs = caida(unicas(b.serie)); dd = cs[cs.length - 1][1]; }
@@ -252,7 +265,8 @@
   /* Mismas formulas que el exportador (panel_estado.metricas): por si el estado no las trae. */
   function metricas(serie) {
     var v = unicas(serie).map(function (p) { return p[1]; }).filter(function (x) { return x > 0; });
-    var out = { dias: Math.max(0, v.length - 1), cagr: null, sharpe: null, sortino: null, caida_maxima: null, volatilidad: null };
+    var out = { dias: Math.max(0, v.length - 1), cagr: null, sharpe: null, sortino: null, caida_maxima: null, volatilidad: null, motivos: {} };
+    if (v.length - 1 < MIN_DIAS) out.motivos = { cagr: MOTIVO_POCOS_DIAS, sharpe: MOTIVO_POCOS_DIAS, sortino: MOTIVO_POCOS_DIAS };
     if (v.length < 3) return out;
     var r = [], i;
     for (i = 1; i < v.length; i++) r.push(v[i] / v[i - 1] - 1);
@@ -262,10 +276,19 @@
     var pico = v[0], dd = 0;
     v.forEach(function (x) { pico = Math.max(pico, x); dd = Math.min(dd, x / pico - 1); });
     out.caida_maxima = dd; out.volatilidad = sd * Math.sqrt(365);
-    out.sharpe = sd > 0 ? m / sd * Math.sqrt(365) : null;
-    out.sortino = sdAbajo > 0 ? m / sdAbajo * Math.sqrt(365) : null;
-    if (r.length >= 90) out.cagr = Math.pow(v[v.length - 1] / v[0], 365 / r.length) - 1;
+    if (r.length >= MIN_DIAS) {
+      out.cagr = Math.pow(v[v.length - 1] / v[0], 365 / r.length) - 1;
+      out.sharpe = sd > 0 ? m / sd * Math.sqrt(365) : null;
+      out.sortino = sdAbajo > 0 ? m / sdAbajo * Math.sqrt(365) : null;
+    }
     return out;
+  }
+
+  /* Valor de una metrica anualizada o, si el estado la oculta, su motivo. */
+  function valorMetrica(m, clave, formato) {
+    if (esNum(m[clave])) return formato(m[clave]);
+    var motivo = (m.motivos && m.motivos[clave]) || (m.dias < MIN_DIAS ? MOTIVO_POCOS_DIAS : '');
+    return '—' + (motivo ? ' <span class="sub">(' + esc(motivo) + ')</span>' : '');
   }
 
   function mediaMovil(cierres, n) {
@@ -405,6 +428,25 @@
       }).join('') + '</tbody></table></div><p class="sub" style="margin-top:8px">Límite de peticiones: no se registra todavía.</p>';
   }
 
+  var ESTADO_PIEZA = { 'funciona': ['ok', 'Funciona'], 'pendiente de fusionar': ['revision', 'Pendiente de fusionar'],
+    'pendiente de instalar': ['pendiente', 'Pendiente de instalar'], 'falla': ['alerta', 'Falla'] };
+  function renderImplantacion(e) {
+    var p = e && e.implantacion;
+    if (!p || !p.length) return faltaDe(e, 'implantacion', 'Sin estado de implantación', 'El estado no trae esta sección todavía.');
+    var cuenta = {};
+    p.forEach(function (x) { cuenta[x.estado] = (cuenta[x.estado] || 0) + 1; });
+    var resumen = Object.keys(ESTADO_PIEZA).filter(function (k) { return cuenta[k]; }).map(function (k) {
+      return chip(ESTADO_PIEZA[k][0], ESTADO_PIEZA[k][1] + ' · ' + cuenta[k]);
+    }).join(' ');
+    return '<div class="opciones" style="margin-bottom:10px">' + resumen + '</div>' +
+      '<div class="tabla implantacion"><table><thead><tr><th>Pieza</th><th>Estado</th><th>Qué falta</th></tr></thead><tbody>' +
+      p.map(function (x) {
+        var s = ESTADO_PIEZA[x.estado] || ['vacio', x.estado];
+        return '<tr data-key="im-' + esc(x.pieza) + '"><td>' + esc(x.pieza) + '</td><td>' + chip(s[0], s[1]) + '</td><td class="sub">' +
+          esc(x.falta) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
   /* --- 3. Mercado ------------------------------------------------------------------------------------------- */
 
   function renderMercado(e) {
@@ -478,9 +520,9 @@
         '<div class="valor num">' + usd(v) + '</div><p class="sub">Inicial ' + usd(c.inicial) + ' · <span class="delta ' + signo(r) + '">' +
         pctFirmado(r, 2) + '</span> · ' + fmt(m.dias, 0) + ' días</p>' + cmp +
         '<dl class="datos">' +
-        filaMetrica('CAGR', m.cagr == null ? '— (menos de 90 días)' : pct(m.cagr, 1), 'cagr', esNum(rf.cagr) ? pct(rf.cagr, 1) : '') +
-        filaMetrica('Sharpe', fmt(m.sharpe, 2), 'sharpe', esNum(rf.sharpe) ? fmt(rf.sharpe, 2) : '') +
-        filaMetrica('Sortino', fmt(m.sortino, 2), 'sortino', '') +
+        filaMetrica('CAGR', valorMetrica(m, 'cagr', function (x) { return pct(x, 1); }), 'cagr', esNum(rf.cagr) ? pct(rf.cagr, 1) : '') +
+        filaMetrica('Sharpe', valorMetrica(m, 'sharpe', function (x) { return fmt(x, 2); }), 'sharpe', esNum(rf.sharpe) ? fmt(rf.sharpe, 2) : '') +
+        filaMetrica('Sortino', valorMetrica(m, 'sortino', function (x) { return fmt(x, 2); }), 'sortino', '') +
         filaMetrica('Caída máxima', pct(m.caida_maxima, 1), 'caida', esNum(rf.caida_maxima) ? pct(rf.caida_maxima, 0) : '') +
         '</dl></article>';
     }).join('') + '</div>';
@@ -600,6 +642,18 @@
 
   /* --- 9. Fundamentos ------------------------------------------------------------------------------------------------ */
 
+  /* Ultimos avisos enviados al usuario (transparencia): el mas reciente arriba. */
+  function renderAvisos(e, ahora) {
+    var a = (e && e.avisos) || [];
+    if (!a.length) return faltaDe(e, 'avisos', 'Sin avisos', 'No hay avisos registrados todavía.');
+    var etq = { decide: ['pendiente', 'Decide'], info: ['ok', 'Info'], fallo: ['alerta', 'Fallo'], otro: ['vacio', 'Aviso'] };
+    return a.slice().reverse().map(function (x, i) {
+      var t = etq[x.tipo] || etq.otro;
+      return '<div class="fila" data-key="av-' + i + '"><div class="izq">' + chip(t[0], t[1]) + ' <span>' + esc(x.texto) +
+        '</span></div><span class="sub" style="white-space:nowrap">' + (x.fecha ? hace(String(x.fecha).slice(0, 19) + 'Z', ahora) : '—') + '</span></div>';
+    }).join('');
+  }
+
   function renderFundamentos() {
     return '<div class="capas">' + ['regla', 'tendencia', 'volatilidad', 'tamano', 'banda', 'costes', 'backtest', 'caida', 'demo', 'sombra', 'decisiones']
       .map(function (k) { return '<button type="button" class="capa" data-fundamento="' + k + '">' + esc(FUNDAMENTOS[k].titulo) + '</button>'; }).join('') +
@@ -617,7 +671,8 @@
     e = normalizar(e);
     return { cabecera: renderCabecera(e, ahora), espera: renderEspera(e), llamadas: renderLlamadas(e, ahora), mercado: renderMercado(e),
       inferencia: renderInferencia(e), carteras: renderCarteras(e), demo: renderDemo(e), sombra: renderSombra(e), ordenes: renderOrdenes(e),
-      riesgo: renderRiesgo(e), proyecto: renderProyecto(e, ahora), hitos: renderHitos(e, ahora), fundamentos: renderFundamentos() };
+      riesgo: renderRiesgo(e), proyecto: renderProyecto(e, ahora), hitos: renderHitos(e, ahora), avisos: renderAvisos(e, ahora),
+      implantacion: renderImplantacion(e), fundamentos: renderFundamentos() };
   }
 
   /* --- Series de los graficos (puras) ------------------------------------------------------------------------------------- */
@@ -631,6 +686,47 @@
   }
   function puntos(serie) { return unicas(serie).map(function (p) { return { time: p[0], value: p[1] }; }); }
 
+  /* Intervalos de vela: diario (del estado) y semanal (agregado aqui). 4 h y 1 h solo si el estado trae
+     velas intradia (velas_intradia); si no, el boton queda desactivado. */
+  var INTERVALOS = [['1d', 'Diario'], ['1w', 'Semanal'], ['4h', '4 h'], ['1h', '1 h']];
+  function intervaloDisponible(e, intervalo) {
+    if (intervalo === '1d' || intervalo === '1w') return true;
+    var vi = e && e.velas_intradia;
+    return !!(vi && vi[intervalo] && Object.keys(vi[intervalo]).some(function (k) { return (vi[intervalo][k] || []).length; }));
+  }
+  /* Lunes (UTC) de la semana ISO de una fecha AAAA-MM-DD */
+  function lunes(dia) {
+    var t = Date.parse(dia.slice(0, 10) + 'T00:00:00Z'), d = new Date(t).getUTCDay();
+    return new Date(t - ((d + 6) % 7) * 86400000).toISOString().slice(0, 10);
+  }
+  /* [[fecha, o, h, l, c, v], ...] diarias -> semanales: apertura del primer dia, maximo, minimo, cierre del
+     ultimo y volumen sumado. La vela de la semana en curso queda incompleta (hasta el ultimo dia con datos). */
+  function semanales(v) {
+    var out = [], actual = null;
+    (v || []).forEach(function (x) {
+      var s = lunes(x[0]);
+      if (!actual || actual[0] !== s) { actual = [s, x[1], x[2], x[3], x[4], x[5] || 0]; out.push(actual); return; }
+      actual[2] = Math.max(actual[2], x[2]); actual[3] = Math.min(actual[3], x[3]); actual[4] = x[4]; actual[5] += x[5] || 0;
+    });
+    return out;
+  }
+  /* Banda de volatilidad: cierre anterior × exp(± desviacion de los ultimos n rendimientos logaritmicos). */
+  function bandas(v, n) {
+    n = n || 30;
+    var r = [], sup = [], inf = [], i;
+    for (i = 1; i < v.length; i++) {
+      if (v[i - 1][4] > 0 && v[i][4] > 0) r.push(Math.log(v[i][4] / v[i - 1][4])); else r.push(null);
+      if (i < n + 1) continue;
+      var ult = r.slice(r.length - n - 1, r.length - 1).filter(function (x) { return x != null; });   // hasta el periodo anterior
+      if (ult.length < n * 0.8) continue;
+      var m = ult.reduce(function (a, b) { return a + b; }, 0) / ult.length;
+      var sd = Math.sqrt(ult.reduce(function (a, b) { return a + (b - m) * (b - m); }, 0) / (ult.length - 1));
+      sup.push({ time: v[i][0], value: v[i - 1][4] * Math.exp(sd) });
+      inf.push({ time: v[i][0], value: v[i - 1][4] * Math.exp(-sd) });
+    }
+    return { sup: sup, inf: inf };
+  }
+
   function marcador(o) {
     var compra = o.lado === 'compra';
     return { time: o.fecha, position: compra ? 'belowBar' : 'aboveBar', shape: compra ? 'arrowUp' : 'arrowDown',
@@ -638,10 +734,11 @@
   }
 
   /* vista: 'carteras' o el simbolo de un activo. Todo el historico: el periodo es un zoom (rango visible). */
-  function seriesGrafico(e, vista, capas) {
+  function seriesGrafico(e, vista, capas, intervalo) {
     capas = capas || {};
+    intervalo = intervalo || '1d';
     var out = { tipo: vista === 'carteras' ? 'lineas' : 'velas', lineas: [], velas: [], volumen: [], ma200: [], marcadores: [],
-      caida: null, exposicion: null, aviso: null };
+      bandas: null, niveles: [], caida: null, exposicion: null, aviso: null, intervalo: intervalo };
     e = normalizar(e);
     if (!e) { out.aviso = 'Sin estado.'; return out; }
     var ops = e.ordenes || [];
@@ -663,23 +760,48 @@
     } else {
       var a = (e.activos || []).filter(function (x) { return x.simbolo === vista; })[0];
       if (!a) { out.aviso = 'Activo sin datos.'; return out; }
-      var v = (e.velas && e.velas[a.simbolo]) || [];
+      var diarias = (e.velas && e.velas[a.simbolo]) || [], v = diarias;
+      if (intervalo === '1w') v = semanales(diarias);
+      else if (intervalo !== '1d') {
+        if (!intervaloDisponible(e, intervalo)) { out.aviso = 'Todavía no hay velas intradía del exchange de ejecución.'; return out; }
+        v = (e.velas_intradia[intervalo][a.simbolo]) || [];
+      }
       if (!v.length) { out.aviso = (e.faltan && (e.faltan.velas || e.faltan.activos)) || 'Sin velas para este activo.'; return out; }
       out.velas = v.map(function (x) { return { time: x[0], open: x[1], high: x[2], low: x[3], close: x[4] }; });
+      if (capas.bandas) {
+        var b2 = bandas(v, 30);
+        out.bandas = b2.sup.length ? b2 : null;
+      }
+      var niv = capas.sltp && e.niveles_sltp && e.niveles_sltp[a.simbolo];
+      if (niv) {
+        if (esNum(niv.stop)) out.niveles.push({ precio: niv.stop, nombre: 'Stop-loss', color: '#F04438' });
+        if (esNum(niv.objetivo)) out.niveles.push({ precio: niv.objetivo, nombre: 'Take-profit', color: '#12B76A' });
+      }
       if (capas.vol !== false) {
         out.volumen = v.map(function (x) {
           return { time: x[0], value: x[5], color: x[4] >= x[1] ? 'rgba(18,183,106,0.45)' : 'rgba(240,68,56,0.45)' };
         });
       }
       if (capas.ma) {
-        var cierres = v.map(function (x) { return [x[0], x[4]]; });
+        // la media de 200 DIAS siempre sale de las diarias; en semanal se toma su valor del ultimo dia de cada semana
+        var cierres = diarias.map(function (x) { return [x[0], x[4]]; });
         var desdeVelas = mediaMovil(cierres, 200);
-        out.ma200 = puntos(desdeVelas.length ? desdeVelas : (a.ma200_serie || []));
+        var ma = desdeVelas.length ? desdeVelas : (a.ma200_serie || []);
+        if (intervalo === '1w') {
+          var porSemana = {};
+          unicas(ma).forEach(function (p) { porSemana[lunes(p[0])] = p[1]; });
+          ma = Object.keys(porSemana).sort().map(function (s) { return [s, porSemana[s]]; });
+        }
+        if (intervalo === '1d' || intervalo === '1w') out.ma200 = puntos(ma);
       }
       if (capas.ops) {
         var hay = {};
         v.forEach(function (x) { hay[x[0]] = true; });
-        ops.filter(function (o) { return o.activo === a.simbolo && hay[o.fecha]; }).forEach(function (o) { out.marcadores.push(marcador(o)); });
+        ops.filter(function (o) { return o.activo === a.simbolo; }).forEach(function (o) {
+          // diario: la fecha; semanal: su lunes; intradia: la vela de las 00:00 UTC de ese dia
+          var t = intervalo === '1w' ? lunes(o.fecha) : (intervalo === '1d' ? o.fecha : Date.parse(o.fecha.slice(0, 10) + 'T00:00:00Z') / 1000);
+          if (hay[t]) { var m = marcador(o); m.time = t; out.marcadores.push(m); }
+        });
       }
     }
     out.marcadores.sort(function (x, y) { return x.time < y.time ? -1 : (x.time > y.time ? 1 : 0); });
@@ -688,6 +810,11 @@
 
   function rangoVisible(datos, periodo) {
     if (!datos.length) return null;
+    if (typeof datos[0].time === 'number') {   // intradia: tiempos en segundos
+      var dias = (PERIODOS.filter(function (p) { return p[0] === periodo; })[0] || [])[1];
+      var fin = datos[datos.length - 1].time;
+      return { from: dias ? Math.max(datos[0].time, fin - dias * 86400) : datos[0].time, to: fin };
+    }
     var serie = datos.map(function (d) { return [d.time, 0]; }), r = recorte(serie, periodo);
     return { from: r[0][0], to: serie[serie.length - 1][0] };
   }
@@ -699,7 +826,9 @@
     textoDecision: textoDecision, enlaceDecision: enlaceDecision, renderTodo: renderTodo, renderEspera: renderEspera,
     renderMercado: renderMercado, renderInferencia: renderInferencia, renderCarteras: renderCarteras, renderLlamadas: renderLlamadas,
     renderDemo: renderDemo, renderSombra: renderSombra, renderOrdenes: renderOrdenes, renderRiesgo: renderRiesgo,
-    renderProyecto: renderProyecto, renderHitos: renderHitos, seriesGrafico: seriesGrafico, rangoVisible: rangoVisible,
+    renderProyecto: renderProyecto, renderHitos: renderHitos, renderAvisos: renderAvisos, seriesGrafico: seriesGrafico, rangoVisible: rangoVisible,
+    renderImplantacion: renderImplantacion, semanales: semanales, lunes: lunes, bandas: bandas, INTERVALOS: INTERVALOS,
+    intervaloDisponible: intervaloDisponible,
     detalleOrden: detalleOrden, detalleFundamento: detalleFundamento, ordenesOrdenadas: ordenesOrdenadas, vacio: vacio,
     FUNDAMENTOS: FUNDAMENTOS, PERIODOS: PERIODOS, SENALES: SENALES
   };
@@ -714,8 +843,9 @@
   var URL_ESTADO = 'https://raw.githubusercontent.com/miguellopezt/agente-panel/datos/estado.json';
   var URL_DIRECTO = 'wss://ws.bitstamp.net';
   var RECARGA_MS = 60 * 1000;
-  var ui = { estado: null, vista: 'carteras', periodo: '3M', capas: { ma: true, ops: true, vol: true, dd: false, exp: false }, tab: 'hoy' };
-  var grafico = null, vidrios = [], ultimoRefresco = 0;
+  var ui = { estado: null, vista: 'carteras', periodo: '3M', intervalo: '1d',
+    capas: { ma: true, ops: true, vol: true, bandas: false, sltp: false, dd: false, exp: false }, tab: 'hoy' };
+  var grafico = null;
   var reducido = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function $(sel, ctx) { return (ctx || doc).querySelector(sel); }
@@ -762,20 +892,31 @@
     var e = ui.estado;
     var vistas = [['carteras', 'Carteras']].concat(((e && e.activos) || []).map(function (a) { return [a.simbolo, a.nombre]; }));
     if (!vistas.some(function (v) { return v[0] === ui.vista; })) ui.vista = 'carteras';
+    // lista: [valor, texto, desactivado?, motivo]
     var seg = function (id, lista, attr, actual) {
       var el = $(id);
       el.innerHTML = '<span class="ind" aria-hidden="true"></span>' + lista.map(function (v) {
-        return '<button type="button" ' + attr + '="' + esc(v[0]) + '" aria-pressed="' + (actual === v[0]) + '">' + esc(v[1]) + '</button>';
+        return '<button type="button" ' + attr + '="' + esc(v[0]) + '" aria-pressed="' + (actual === v[0]) + '"' +
+          (v[2] ? ' disabled title="' + esc(v[3]) + '"' : '') + '>' + esc(v[1]) + '</button>';
       }).join('');
       posicionarIndicador(el);
     };
-    seg('#vistas', vistas, 'data-vista', ui.vista);
-    seg('#periodos', PERIODOS.map(function (p) { return [p[0], p[0]]; }), 'data-periodo', ui.periodo);
     var activo = ui.vista !== 'carteras';
-    var defs = activo ? [['ma', 'Media de 200 días'], ['ops', 'Órdenes'], ['vol', 'Volumen']]
+    if (!intervaloDisponible(e, ui.intervalo)) ui.intervalo = '1d';
+    seg('#vistas', vistas, 'data-vista', ui.vista);
+    $('#intervalos').hidden = !activo;
+    seg('#intervalos', INTERVALOS.map(function (i) {
+      return [i[0], i[1], !intervaloDisponible(e, i[0]), 'Cuando haya velas intradía del exchange de ejecución'];
+    }), 'data-intervalo', ui.intervalo);
+    seg('#periodos', PERIODOS.map(function (p) { return [p[0], p[0]]; }), 'data-periodo', ui.periodo);
+    var hayNiveles = !!(e && e.niveles_sltp && Object.keys(e.niveles_sltp).length);
+    var intradia = ui.intervalo !== '1d' && ui.intervalo !== '1w';
+    var defs = activo ? [['ma', 'Media de 200 días', intradia, 'Solo en velas diarias y semanales'], ['ops', 'Órdenes'], ['vol', 'Volumen'], ['bandas', 'Banda de volatilidad'],
+      ['sltp', 'Stop-loss / take-profit', !hayNiveles, 'Cuando el estudio de stop-loss y take-profit los produzca']]
       : [['ops', 'Órdenes'], ['dd', 'Caída desde máximos'], ['exp', 'Exposición']];
     $('#capas').innerHTML = defs.map(function (d) {
-      return '<button type="button" class="capa" data-capa="' + d[0] + '" aria-pressed="' + (ui.capas[d[0]] !== false && !!ui.capas[d[0]]) + '">' + d[1] + '</button>';
+      return '<button type="button" class="capa" data-capa="' + d[0] + '" aria-pressed="' + (!d[2] && ui.capas[d[0]] !== false && !!ui.capas[d[0]]) + '"' +
+        (d[2] ? ' disabled title="' + esc(d[3]) + '"' : '') + '>' + d[1] + '</button>';
     }).join('');
   }
 
@@ -802,13 +943,14 @@
     var LW = root.LightweightCharts, cont = $('#grafico');
     if (!LW) { cont.textContent = 'No se pudo cargar la librería del gráfico.'; return; }
     if (grafico) { grafico.chart.remove(); grafico = null; }
-    var d = seriesGrafico(ui.estado, ui.vista, ui.capas), aviso = $('#aviso-grafico');
+    var d = seriesGrafico(ui.estado, ui.vista, ui.capas, ui.intervalo), aviso = $('#aviso-grafico');
     aviso.hidden = !d.aviso;
     aviso.innerHTML = d.aviso ? vacio('Sin gráfico', d.aviso) : '';
     cont.hidden = !!d.aviso;
     $('#leyenda').innerHTML = '';
     if (d.aviso) return;
     var chart = LW.createChart(cont, Object.assign({ autoSize: true }, opcionesTema()));
+    if (d.tipo === 'velas' && d.intervalo !== '1d' && d.intervalo !== '1w') chart.applyOptions({ timeScale: { timeVisible: true } });
     var g = { chart: chart, series: [], principal: null, marcadores: d.marcadores, d: d };
     var sinEtiqueta = { priceLineVisible: false, lastValueVisible: false };
     var leyenda = [];
@@ -822,6 +964,19 @@
         ma.setData(d.ma200); g.series.push({ s: ma, nombre: 'Media 200 d' });
         leyenda.push(['#F79009', 'Media de 200 días']);
       }
+      if (d.bandas) {
+        var colorBanda = variable('--acento') || '#3550F0';
+        [['sup', 'Banda +1σ'], ['inf', 'Banda −1σ']].forEach(function (b) {
+          var s = chart.addSeries(LW.LineSeries, Object.assign({ color: colorBanda, lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false }, sinEtiqueta));
+          s.setData(d.bandas[b[0]]); g.series.push({ s: s, nombre: b[1] });
+        });
+        var NOMBRE_IV = { '1d': 'días', '1w': 'semanas', '4h': 'velas de 4 h', '1h': 'horas' };
+        leyenda.push([colorBanda, 'Banda de volatilidad (±1σ de las últimas 30 ' + (NOMBRE_IV[d.intervalo] || 'velas') + ')']);
+      }
+      d.niveles.forEach(function (n) {
+        g.principal.createPriceLine({ price: n.precio, color: n.color, lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: n.nombre });
+        leyenda.push([n.color, n.nombre]);
+      });
       if (d.volumen.length) {
         var vol = chart.addSeries(LW.HistogramSeries, Object.assign({ priceFormat: { type: 'volume' } }, sinEtiqueta), 1);
         vol.setData(d.volumen); g.series.push({ s: vol, nombre: 'Volumen', tipo: 'volumen' });
@@ -857,7 +1012,7 @@
     $('#leyenda').innerHTML = leyenda.map(function (l) { return '<span><i style="background:' + esc(l[0]) + '"></i>' + esc(l[1]) + '</span>'; }).join('');
     chart.subscribeCrosshairMove(function (p) { moverTooltip(g, p); });
     chart.subscribeClick(function (p) {
-      var t = p && typeof p.time === 'string' ? p.time : null;
+      var t = p && (typeof p.time === 'string' || typeof p.time === 'number') ? p.time : null;
       var m = t && g.marcadores.filter(function (x) { return x.time === t; })[0];
       if (m) abrirHoja(detalleOrden(m.orden));
     });
@@ -947,79 +1102,52 @@
     });
   }, 1000);
 
-  /* --- Vidrio: liquid-glass-js en la cabecera y la barra inferior; si no, desenfoque de CSS ---------------------------------------------------- */
+  /* --- Pantalla completa del grafico: Fullscreen API o, sin ella (iPhone), la tarjeta ocupa la ventana --------------------------------------- */
 
-  function vidrioPosible() {
-    var mm = function (q) { return root.matchMedia && root.matchMedia(q).matches; };
-    return !!root.LiquidGlass && root.CSS && root.CSS.supports && root.CSS.supports('filter', 'url(#x)') &&
-      !mm('(prefers-reduced-transparency: reduce)') && !reducido && (root.navigator.hardwareConcurrency || 2) >= 2 &&
-      // el clon de la pagina pesa: en moviles con poca memoria, desenfoque de CSS
-      (root.navigator.deviceMemory == null || root.navigator.deviceMemory >= 4);
+  function enCompleta() { return !!(doc.fullscreenElement || doc.webkitFullscreenElement) || $('#seccion-grafico').classList.contains('completa'); }
+  function marcarCompleta() {
+    var b = $('#pantalla-completa'), si = enCompleta();
+    b.setAttribute('aria-pressed', String(si));
+    b.setAttribute('aria-label', si ? 'Salir de pantalla completa' : 'Gráfico a pantalla completa');
+    if (grafico) root.requestAnimationFrame(aplicarPeriodo);
   }
-  function geometria(el) { var r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: Math.max(1, r.width), h: Math.max(1, r.height) }; }
-  function iniciarVidrio() {
-    if (!vidrioPosible()) return;
-    var fondo = $('#principal');
-    $$('.flotante').forEach(function (el) {
-      if (el.offsetParent === null && getComputedStyle(el).display === 'none') return;
-      var g = geometria(el);
-      try {
-        // zIndex por debajo de la capa (.flotante, 120): el vidrio queda detras de su contenido
-        var v = new root.LiquidGlass({ background: fondo, width: g.w, height: g.h, radius: 0, x: g.x, y: g.y, zIndex: 100,
-          draggable: false, scale: 18, depth: 18, chroma: 0.02, edge: 0.3, glow: 0, tint: 0, blur: 2.5 });
-        vidrios.push({ v: v, el: el });
-        limpiarClones();
-      } catch (x) { /* sin vidrio: queda el desenfoque de CSS */ }
-    });
-    if (vidrios.length) doc.documentElement.classList.add('con-refraccion');
-    ultimoRefresco = Date.now();
-  }
-  /* El vidrio refracta un clon de la pagina: sin ids duplicados, sin foco y fuera del arbol de accesibilidad. */
-  function limpiarClones() {
-    $$('.lqg-lens, .lqg-glass').forEach(function (el) {
-      el.setAttribute('aria-hidden', 'true');
-      el.inert = true;
-      $$('[id]', el).forEach(function (x) { x.removeAttribute('id'); });
-      $$('[aria-labelledby],[data-precio],[data-var],[data-directo]', el).forEach(function (x) {
-        ['aria-labelledby', 'data-precio', 'data-var', 'data-directo'].forEach(function (a) { x.removeAttribute(a); });
-      });
-    });
-  }
-  function recolocarVidrio() {
-    vidrios.forEach(function (x) {
-      var g = geometria(x.el);
-      x.v.set({ width: g.w, height: g.h }); x.v.moveTo(g.x, g.y);
-    });
-  }
-  function refrescarVidrio() {
-    if (!vidrios.length || Date.now() - ultimoRefresco < RECARGA_MS - 1000) return;
-    ultimoRefresco = Date.now();
-    vidrios.forEach(function (x) { x.v.refresh(); });
-    limpiarClones();
+  function alternarCompleta() {
+    var s = $('#seccion-grafico');
+    if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+      (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc);
+    } else if (s.classList.contains('completa')) {
+      s.classList.remove('completa'); doc.documentElement.style.overflow = ''; marcarCompleta();
+    } else if (s.requestFullscreen || s.webkitRequestFullscreen) {
+      (s.requestFullscreen || s.webkitRequestFullscreen).call(s);
+    } else {
+      s.classList.add('completa'); doc.documentElement.style.overflow = 'hidden'; marcarCompleta();
+    }
   }
 
   /* --- Hoja inferior (detalle y fundamentos) ------------------------------------------------------------------------------------------------ */
 
-  var ultimoFoco = null;
+  /* <dialog> nativo con showModal(): pagina inerte, foco contenido, Esc y gesto atras, y devolucion del foco
+     los hace el navegador; aqui solo se pone el contenido. */
   function abrirHoja(html) {
     var h = $('#hoja');
-    ultimoFoco = doc.activeElement;
     $('#hoja-contenido').innerHTML = html;
-    h.classList.add('abierta'); $('#velo').classList.add('abierto');
-    h.setAttribute('aria-hidden', 'false');
-    fondoInerte(true);                       // dialogo modal: el foco no sale a la pagina de detras
-    $('#hoja-cerrar').focus();
-  }
-  function fondoInerte(si) {
-    $$('body > header, body > main, body > nav, body > .saltar').forEach(function (el) { el.inert = si; });
+    if (!h.open) h.showModal();
   }
   function cerrarHoja() {
     var h = $('#hoja');
-    if (!h.classList.contains('abierta')) return;
-    h.classList.remove('abierta'); $('#velo').classList.remove('abierto');
-    h.setAttribute('aria-hidden', 'true');
-    fondoInerte(false);
-    if (ultimoFoco && ultimoFoco.focus) ultimoFoco.focus();
+    if (h.open) h.close();
+  }
+  /* closedby="any" (tocar fuera cierra) aun no existe en Safari: respaldo por posicion del puntero, con la
+     pulsacion y la suelta fuera de la hoja (un arrastre que acaba en el fondo no la cierra). */
+  function respaldoCerrarFuera() {
+    if (!root.HTMLDialogElement || 'closedBy' in root.HTMLDialogElement.prototype) return;
+    var h = $('#hoja'), fuera = false;
+    var esFuera = function (e) {
+      var r = h.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    h.addEventListener('pointerdown', function (e) { fuera = esFuera(e); });
+    h.addEventListener('pointerup', function (e) { if (fuera && esFuera(e)) h.close(); });
   }
 
   /* --- Pestanas del movil --------------------------------------------------------------------------------------------------------------- */
@@ -1087,7 +1215,6 @@
         conectarDirecto();
         $('#error').hidden = true;
         estadoBoton(boton, 'ok'); root.setTimeout(function () { estadoBoton(boton, 'reposo'); }, 1400);
-        if (!vidrios.length) iniciarVidrio(); else if (cambio) refrescarVidrio();
       })
       .catch(function (err) {
         var e = $('#error'); e.hidden = false;
@@ -1104,6 +1231,8 @@
       if (t.hasAttribute('data-fundamento')) return abrirHoja(detalleFundamento(t.getAttribute('data-fundamento')));
       if (t.hasAttribute('data-periodo')) { ui.periodo = t.getAttribute('data-periodo'); renderControles(); return aplicarPeriodo(); }
       if (t.hasAttribute('data-vista')) { ui.vista = t.getAttribute('data-vista'); renderControles(); return dibujar(); }
+      if (t.hasAttribute('data-intervalo')) { if (t.disabled) return; ui.intervalo = t.getAttribute('data-intervalo'); renderControles(); return dibujar(); }
+      if (t.id === 'pantalla-completa') return alternarCompleta();
       if (t.hasAttribute('data-capa')) {
         var c = t.getAttribute('data-capa'); ui.capas[c] = !(ui.capas[c] !== false && ui.capas[c]); renderControles(); return dibujar();
       }
@@ -1112,8 +1241,11 @@
       if (t.id === 'hoja-cerrar') return cerrarHoja();
       if (t.id === 'actualizar') return cargar();
     });
+    doc.addEventListener('fullscreenchange', marcarCompleta);
+    doc.addEventListener('webkitfullscreenchange', marcarCompleta);
     doc.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Escape') cerrarHoja();
+      // Esc de la hoja lo gestiona el <dialog>; aqui solo la pantalla completa de respaldo
+      if (ev.key === 'Escape' && !$('#hoja').open && $('#seccion-grafico').classList.contains('completa')) alternarCompleta();
       var fila = ev.target.closest && ev.target.closest('[data-orden]');
       if (fila && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); fila.click(); }
       var grupo = ev.target.closest && ev.target.closest('.seg');
@@ -1122,11 +1254,11 @@
         var n = bs[(i + (ev.key === 'ArrowRight' ? 1 : bs.length - 1)) % bs.length]; n.focus(); n.click();
       }
     });
-    $('#velo').addEventListener('click', cerrarHoja);
+    respaldoCerrarFuera();
     var tr = null;
     root.addEventListener('resize', function () {
       root.clearTimeout(tr);
-      tr = root.setTimeout(function () { $$('.seg').forEach(posicionarIndicador); recolocarVidrio(); }, 120);
+      tr = root.setTimeout(function () { $$('.seg').forEach(posicionarIndicador); }, 120);
     });
     root.setInterval(function () { if (!doc.hidden) cargar(); }, RECARGA_MS);
     doc.addEventListener('visibilitychange', function () {

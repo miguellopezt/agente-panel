@@ -1,6 +1,8 @@
-/* Panel del decisor (docs/panel/diseno.md). Vidrio solo en capas flotantes (cabecera, barra
-   inferior, hoja de detalle); los datos viven en superficies con contraste AA. Sin animaciones
-   de fondo. Movimiento solo por cambios de datos o por interaccion. */
+/* Panel del decisor (docs/panel/diseno.md). v2: sin vidrio propio. Superficies opacas con
+   contraste AA; en el movil lo unico que flota es la barra del navegador (en iOS 26, el
+   Liquid Glass nativo de Safari), que se tiñe con el fondo de la pagina (theme-color) y deja
+   pasar el contenido por debajo (viewport-fit=cover + safe-area). Sin animaciones de fondo.
+   Movimiento solo por cambios de datos o por interaccion. */
 
 @font-face {
   font-family: "Geist"; font-style: normal; font-weight: 400 600; font-display: swap;
@@ -15,15 +17,16 @@
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
+/* Paleta «Arena» (neutros cálidos, acento verde azulado), elegida por el usuario el 18-nov-2026 */
 :root {
-  --fondo: #E9EDF3;
-  --fondo-2: #DCE3EC;
-  --superficie: #FFFFFF;
-  --superficie-2: #F3F5F9;
-  --borde: #D6DCE5;
-  --texto: #0B1220;
-  --texto-2: #535D6D;
-  --acento: #3550F0;
+  --fondo: #F4F1EA;
+  --fondo-2: #EAE5DA;
+  --superficie: #FFFDF8;
+  --superficie-2: #F8F5EE;
+  --borde: #E2DCCF;
+  --texto: #1F1B16;
+  --texto-2: #655D51;
+  --acento: #0F766E;
   --compra: #12B76A;
   --venta: #F04438;
   --neutral: #F79009;
@@ -42,14 +45,14 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --fondo: #06080C;
-    --fondo-2: #0D1118;
-    --superficie: #10141B;
-    --superficie-2: #171C25;
-    --borde: #242B37;
-    --texto: #EEF2F7;
-    --texto-2: #A0AAB8;
-    --acento: #7C93FF;
+    --fondo: #1C1A17;
+    --fondo-2: #22201C;
+    --superficie: #26231F;
+    --superficie-2: #2E2A25;
+    --borde: #3B3630;
+    --texto: #F1ECE4;
+    --texto-2: #B8AFA2;
+    --acento: #3CCFBE;
     --compra-t: #47CD89;
     --venta-t: #F97066;
     --neutral-t: #FDB022;
@@ -57,8 +60,27 @@
   }
 }
 
+/* --- Paletas alternativas (?paleta=0|1|3), solo para comparar ------------------------------- */
+/* 0 · La anterior al panel v2 (oscuro casi negro) */
+:root[data-paleta="0"] { --fondo: #E9EDF3; --fondo-2: #DCE3EC; --superficie: #FFFFFF; --superficie-2: #F3F5F9;
+  --borde: #D6DCE5; --texto: #0B1220; --texto-2: #535D6D; --acento: #3550F0; }
+/* 1 · Pizarra: grises azulados, acento azul */
+:root[data-paleta="1"] { --fondo: #EEF1F5; --fondo-2: #E2E7EE; --superficie: #FFFFFF; --superficie-2: #F5F7FA;
+  --borde: #D5DBE3; --texto: #131A24; --texto-2: #566173; --acento: #2F5BD3; }
+/* 3 · Índigo: fríos con acento violeta */
+:root[data-paleta="3"] { --fondo: #EEEEF8; --fondo-2: #E3E3F2; --superficie: #FFFFFF; --superficie-2: #F6F6FC;
+  --borde: #D9D9EC; --texto: #14142B; --texto-2: #57577A; --acento: #5B4FE0; }
+@media (prefers-color-scheme: dark) {
+  :root[data-paleta="0"] { --fondo: #06080C; --fondo-2: #0D1118; --superficie: #10141B; --superficie-2: #171C25;
+    --borde: #242B37; --texto: #EEF2F7; --texto-2: #A0AAB8; --acento: #7C93FF; }
+  :root[data-paleta="1"] { --fondo: #161B22; --fondo-2: #1B2129; --superficie: #1F252E; --superficie-2: #262D37;
+    --borde: #313946; --texto: #E8ECF1; --texto-2: #A3ADBA; --acento: #7EA0FF; }
+  :root[data-paleta="3"] { --fondo: #15152B; --fondo-2: #1A1A33; --superficie: #1E1E3A; --superficie-2: #252545;
+    --borde: #33335A; --texto: #ECECFA; --texto-2: #ABABD0; --acento: #A29BFF; }
+}
+
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--alto-cabecera) + 12px); }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--alto-cabecera) + 12px); background: var(--fondo); }
 body {
   margin: 0; color: var(--texto); font: 400 15px/1.5 var(--fuente);
   font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
@@ -75,26 +97,10 @@ button { font: inherit; color: inherit; }
 .boton.saltar { position: absolute; left: -9999px; top: 8px; z-index: 300; }   /* .boton no lo devuelve al flujo */
 .boton.saltar:focus { left: 12px; }
 
-/* --- Capas flotantes con vidrio ------------------------------------------------------------- */
-.flotante { position: fixed; left: 0; right: 0; z-index: 120; }
-.vidrio-css {   /* degradacion: desenfoque. Con liquid-glass-js activo se quita (clase .con-refraccion) */
-  background: color-mix(in srgb, var(--superficie) 72%, transparent);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
-  border: 1px solid color-mix(in srgb, var(--borde) 70%, transparent);
-}
-/* con refraccion, la superficie sigue siendo lo bastante opaca para que el texto de la capa
-   cumpla AA: se ve el contenido doblado por debajo, pero no compite con las etiquetas */
-.con-refraccion .vidrio-css { background: color-mix(in srgb, var(--superficie) 86%, transparent);
-  -webkit-backdrop-filter: none; backdrop-filter: none; }
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .vidrio-css { background: var(--superficie); }
-}
-
-/* liquid-glass-js inyecta una sombra oscura fija: aqui solo la neutra del sistema */
-.lqg-glass { box-shadow: var(--sombra) !important; }
-.lqg-glass, .lqg-lens { pointer-events: none !important; }   /* debajo de la capa, nunca recibe toques */
-.cabecera { top: 0; height: var(--alto-cabecera); padding: 0 16px; padding-top: env(safe-area-inset-top);
-  display: flex; align-items: center; gap: 12px; border-width: 0 0 1px; }
+/* --- Cabecera: opaca, fija arriba (sin vidrio) --------------------------------------------- */
+.cabecera { position: sticky; top: 0; z-index: 120; background: var(--fondo); border-bottom: 1px solid var(--borde);
+  padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); }
+.cabecera-fila { height: var(--alto-cabecera); display: flex; align-items: center; gap: 12px; }
 #cabecera { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 #actualizar { width: 40px; padding: 0; flex: none; }
 #actualizar[data-estado-boton="cargando"] svg { opacity: .4; }
@@ -102,7 +108,9 @@ button { font: inherit; color: inherit; }
 .cabecera .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-left: auto; }
 .cabecera .chips::-webkit-scrollbar { display: none; }
 
-.contenido { max-width: 1240px; margin: 0 auto; padding: calc(var(--alto-cabecera) + 16px) 16px calc(var(--alto-nav) + 36px); }
+/* abajo, el hueco de la barra del navegador: el contenido pasa por debajo, pero lo ultimo no queda tapado */
+.contenido { max-width: 1240px; margin: 0 auto;
+  padding: 16px max(16px, env(safe-area-inset-right)) calc(36px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
 .rejilla { display: grid; gap: 14px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
 .c12 { grid-column: span 12; } .c8 { grid-column: span 8; } .c7 { grid-column: span 7; } .c6 { grid-column: span 6; }
 .c5 { grid-column: span 5; } .c4 { grid-column: span 4; }
@@ -178,6 +186,14 @@ a.boton { text-decoration: none; color: var(--texto); }
 
 /* --- Mercado ------------------------------------------------------------------------------------------- */
 .activos { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+/* «Mercado» comparte fila con «Qué dice la regla hoy», que es mas alta: la rejilla estira la
+   tarjeta y sus activos quedaban arriba con un hueco debajo. Ahora llenan la altura (el
+   minigrafico crece). */
+.tarjeta.llena { display: flex; flex-direction: column; }
+.tarjeta.llena > #mercado, .tarjeta.llena .activos { flex: 1; }
+.tarjeta.llena > #mercado { display: flex; flex-direction: column; }
+.tarjeta.llena .activo { display: flex; flex-direction: column; }
+.tarjeta.llena .activo .mini { flex: 1; min-height: 44px; }
 .activo, .cartera { border: 1px solid var(--borde); border-radius: 12px; padding: 14px; background: var(--superficie); min-width: 0; }
 .datos dd.pos { color: var(--compra-t); } .datos dd.neg { color: var(--venta-t); }
 .fila-click { cursor: pointer; transition: background-color .16s var(--curva); }
@@ -214,7 +230,18 @@ a.boton { text-decoration: none; color: var(--texto); }
 .grafico { position: relative; width: 100%; height: 420px; touch-action: pan-y; }
 .grafico.bajo { height: 260px; }
 .tooltip { position: absolute; z-index: 5; left: 0; top: 0; pointer-events: none; min-width: 150px; padding: 8px 10px;
-  border-radius: 10px; font-size: 12.5px; opacity: 0; box-shadow: var(--sombra); }
+  border-radius: 10px; font-size: 12.5px; opacity: 0; box-shadow: var(--sombra);
+  background: var(--superficie); border: 1px solid var(--borde); }
+#pantalla-completa { width: 40px; padding: 0; flex: none; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.capa:disabled { opacity: .45; cursor: not-allowed; }
+/* pantalla completa: Fullscreen API o, donde no existe (iPhone), la tarjeta ocupa la ventana */
+#seccion-grafico:fullscreen, #seccion-grafico.completa { display: flex; flex-direction: column; border-radius: 0; overflow: auto;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+#seccion-grafico.completa { position: fixed; inset: 0; z-index: 200; }
+#seccion-grafico:fullscreen .marco-grafico, #seccion-grafico.completa .marco-grafico { flex: 1; min-height: 0; }
+#seccion-grafico:fullscreen .grafico, #seccion-grafico.completa .grafico { height: 100%; min-height: 280px; }
+.implantacion td:first-child { font-weight: 500; }
 .tooltip.visible { opacity: 1; }
 .tooltip .t { display: flex; justify-content: space-between; gap: 14px; }
 .leyenda { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12.5px; color: var(--texto-2); }
@@ -246,13 +273,16 @@ td { padding: 10px 8px 10px 0; border-top: 1px solid var(--borde); vertical-alig
 .vacio b { color: var(--texto); font-weight: 600; display: block; }
 
 /* --- Hoja inferior (fundamentos y detalle) ------------------------------------------------------------ */
-.velo { position: fixed; inset: 0; z-index: 180; background: rgba(6, 8, 12, .38); opacity: 0; pointer-events: none;
-  transition: opacity .2s var(--curva); }
-.velo.abierto { opacity: 1; pointer-events: auto; }
-.hoja { position: fixed; z-index: 190; left: 0; right: 0; bottom: 0; max-height: 78vh; overflow-y: auto; padding: 18px 18px 28px;
-  border-radius: 20px 20px 0 0; transform: translateY(105%); visibility: hidden;
-  transition: transform .3s var(--curva), visibility 0s .3s; }
-.hoja.abierta { transform: translateY(0); visibility: visible; transition-delay: 0s; }
+/* <dialog> modal: capa superior, pagina inerte y Esc los pone el navegador. Pegado abajo como una hoja. */
+dialog.hoja { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; max-width: none; max-height: 78vh; overflow-y: auto;
+  padding: 18px max(18px, env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  color: var(--texto); background: var(--fondo); border: 0; border-top: 1px solid var(--borde);
+  border-radius: 20px 20px 0 0; }
+/* sin esto, desplazar sobre el fondo o dentro de la hoja mueve la pagina de detras */
+dialog.hoja:modal { overscroll-behavior: contain; }
+dialog.hoja::backdrop { background: rgba(6, 8, 12, .38); overflow: hidden; overscroll-behavior: contain; }
+@media (min-width: 761px) { dialog.hoja { max-width: 640px; margin: 0 auto; } }
+.hoja-cab { display: flex; justify-content: flex-end; margin: 0 0 4px; }
 .hoja .asa { width: 40px; height: 4px; border-radius: 2px; background: var(--borde); margin: -6px auto 12px; }
 .hoja h2 { font-size: 17px; margin-bottom: 8px; }
 .hoja .texto { background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 14px; }
@@ -260,17 +290,15 @@ td { padding: 10px 8px 10px 0; border-top: 1px solid var(--borde); vertical-alig
 .hoja dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 0; }
 .hoja dt { color: var(--texto-2); } .hoja dd { margin: 0; text-align: right; font-weight: 500; }
 
-/* --- Navegacion: barra inferior en el movil ---------------------------------------------------------- */
-.navegacion { bottom: 0; height: calc(var(--alto-nav) + env(safe-area-inset-bottom)); padding: 6px 8px env(safe-area-inset-bottom);
-  display: none; grid-template-columns: repeat(4, 1fr); border-width: 1px 0 0; }
-.pestana { position: relative; z-index: 1; border: 0; background: transparent; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 2px; font-size: 11.5px; font-weight: 500; color: var(--texto-2);
-  border-radius: 12px; min-height: 48px; transition: color .16s var(--curva), transform .12s var(--curva); }
-.pestana svg { width: 21px; height: 21px; }
+/* --- Navegacion: pestanas bajo la cabecera en el movil (no flotan: abajo solo esta la barra del navegador) --- */
+.navegacion { position: relative; display: none; grid-template-columns: repeat(4, 1fr); padding: 0 0 6px; }
+.pestana { position: relative; z-index: 1; border: 0; background: transparent; display: flex;
+  align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: var(--texto-2);
+  border-radius: 10px; min-height: 48px; transition: color .16s var(--curva), transform .12s var(--curva); }
 .pestana[aria-current="page"] { color: var(--acento); }
 /* hasta el primer pintado no se ve el contenido: evita que salte al llenarse (CLS) */
 html.js:not(.cargado) .contenido { visibility: hidden; }
-.navegacion .ind { position: absolute; top: 6px; height: 48px; left: 8px; width: calc((100% - 16px) / 4); border-radius: 12px;
+.navegacion .ind { position: absolute; top: 0; height: 48px; left: 0; width: 25%; border-radius: 10px;
   background: color-mix(in srgb, var(--acento) 12%, transparent); transform: translateX(calc(var(--i, 0) * 100%)); }
 .navegacion.listo .ind { transition: transform .28s var(--curva); }
 
@@ -285,7 +313,7 @@ footer a { color: var(--texto-2); }
   /* en el movil manda el estado: el titulo queda para lectores de pantalla */
   .cabecera h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .cabecera .chips { margin-left: 0; }
-  .contenido { padding-left: 12px; padding-right: 12px; }
+  .contenido { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
   .navegacion { display: grid; }
   .rejilla > [data-tab] { display: none; }
   body[data-tab="hoy"] .rejilla > [data-tab="hoy"], body[data-tab="grafico"] .rejilla > [data-tab="grafico"],
