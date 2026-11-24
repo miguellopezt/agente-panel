@@ -175,7 +175,7 @@
     velas: { titulo: 'Velas diarias', texto: [
       'Cada vela resume un día UTC: apertura, máximo, mínimo y cierre. Verde si cerró por encima de la apertura. Debajo, el volumen negociado.',
       'Las flechas marcan las órdenes de la cartera B: tócalas para ver su detalle. Pellizca o usa la rueda para acercar y arrastra para moverte.',
-      'Semanal: cada vela agrupa una semana de lunes a domingo (UTC) a partir de las diarias. Las velas de 4 h y 1 h llegarán cuando haya velas intradía del exchange de ejecución.',
+      'Semanal: cada vela agrupa una semana de lunes a domingo (UTC) a partir de las diarias. Las velas de 4 h y 1 h son del exchange de ejecución; si un día no llegan, esos botones quedan desactivados.',
       'Banda de volatilidad: el cierre anterior ± una desviación típica de los rendimientos de las últimas 30 velas del intervalo elegido (30 días en diario, 30 semanas en semanal, 120 horas en 4 h, 30 horas en 1 h). Es el movimiento «normal» de una vela, así que no es comparable entre intervalos.'] },
     implantacion: { titulo: 'Estado de implantación', texto: [
       'Cada pieza del sistema y en qué punto está: funciona, pendiente de fusionar (el código está en revisión), pendiente de instalar (está listo, pero instalarlo requiere permisos de administrador) o falla (su última ejecución no terminó bien).',
